@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Desktop meeting transcription studio with configurable speech-to-text and summaries.">
+  <title>Meeting Transcriber Studio</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/beast-gate.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff7a59'/%3E%3Cstop offset='1' stop-color='%2353d7ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='%23091218'/%3E%3Cpath d='M20 42V24a12 12 0 1 1 24 0v18' stroke='url(%23g)' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M16 33a16 16 0 0 0 32 0' stroke='%23f6f8ff' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M32 49v5' stroke='%23f6f8ff' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <style>@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@300;400;500;600;700&display=swap');</style>
+</head>
+<body>
+  <section class="gate" id="login-gate" aria-label="Beast Gate">
+    <div class="gate__scene" aria-hidden="true">
+      <div class="gate__sky"></div>
+      <div class="gate__blood-moon"></div>
+      <div class="gate__moon-halo"></div>
+      <div class="gate__stars"></div>
+      <div class="gate__mountains"><div class="gate__mountain gate__mountain--far"></div><div class="gate__mountain gate__mountain--mid"></div><div class="gate__mountain gate__mountain--near"></div></div>
+      <div class="gate__portal-wrap"><div class="gate__arch gate__arch--left"></div><div class="gate__arch gate__arch--right"></div><div class="gate__arch gate__arch--top"></div><div class="gate__portal-core"></div><div class="gate__portal-glow"></div><div class="gate__portal-rune gate__portal-rune--1">ᚱ</div><div class="gate__portal-rune gate__portal-rune--2">ᚦ</div><div class="gate__portal-rune gate__portal-rune--3">ᛟ</div><div class="gate__portal-rune gate__portal-rune--4">ᛗ</div></div>
+      <div class="gate__beast-wrap"><div class="gate__beast-shadow"></div><div class="gate__beast"><div class="gate__b-body"></div><div class="gate__b-chest"></div><div class="gate__b-neck"></div><div class="gate__b-head"><div class="gate__b-ear gate__b-ear--left"></div><div class="gate__b-ear gate__b-ear--right"></div><div class="gate__b-eye-socket gate__b-eye-socket--left"><div class="gate__b-eye gate__b-eye--left"><div class="gate__b-eye-core"></div><div class="gate__b-eye-glow"></div></div></div><div class="gate__b-eye-socket gate__b-eye-socket--right"><div class="gate__b-eye gate__b-eye--right"><div class="gate__b-eye-core"></div><div class="gate__b-eye-glow"></div></div></div><div class="gate__b-snout"><div class="gate__b-jaw gate__b-jaw--upper"></div><div class="gate__b-jaw gate__b-jaw--lower"><div class="gate__b-tooth gate__b-tooth--1"></div><div class="gate__b-tooth gate__b-tooth--2"></div><div class="gate__b-tooth gate__b-tooth--3"></div></div><div class="gate__b-nostril gate__b-nostril--left"></div><div class="gate__b-nostril gate__b-nostril--right"></div></div><div class="gate__b-head-ridge"></div></div><div class="gate__b-paw gate__b-paw--left"><div class="gate__b-claw gate__b-claw--1"></div><div class="gate__b-claw gate__b-claw--2"></div><div class="gate__b-claw gate__b-claw--3"></div></div><div class="gate__b-paw gate__b-paw--right"><div class="gate__b-claw gate__b-claw--1"></div><div class="gate__b-claw gate__b-claw--2"></div><div class="gate__b-claw gate__b-claw--3"></div></div><div class="gate__b-rimlight"></div><div class="gate__b-fur-highlight gate__b-fur-highlight--1"></div><div class="gate__b-fur-highlight gate__b-fur-highlight--2"></div></div></div>
+      <div class="gate__fog gate__fog--back"></div><div class="gate__fog gate__fog--mid"></div><div class="gate__fog gate__fog--front"></div>
+      <div class="gate__smoke gate__smoke--left"></div><div class="gate__smoke gate__smoke--right"></div>
+      <canvas class="gate__embers-canvas" id="gate-embers"></canvas>
+      <canvas class="gate__rain-canvas" id="gate-fire-rain"></canvas>
+      <div class="gate__ground-light"></div>
+      <div class="gate__vignette"></div>
+      <div class="gate__success-flash" id="gate-success-flash"></div>
+      <div class="gate__welcome-text" id="gate-welcome-text" aria-live="assertive">
+        <span class="gate__welcome-title">Welcome to Jamaluuu World</span>
+        <span class="gate__welcome-sub">Local AI Transcription Studio is awakening.</span>
+      </div>
+    </div>
+    <div class="gate__brand">
+      <svg class="gate__brand-mark" viewBox="0 0 36 36" aria-hidden="true"><polygon points="18,2 34,30 2,30" fill="none" stroke="#ff3c2a" stroke-width="2.5" stroke-linejoin="round"/><polygon points="18,10 28,26 8,26" fill="#ff3c2a" opacity="0.4"/><line x1="18" y1="14" x2="18" y2="22" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="26" r="1.5" fill="#fff"/></svg>
+      <div>
+        <p class="gate__brand-title">MEETING TRANSCRIBER</p>
+        <p class="gate__brand-sub">Local AI Transcription Studio</p>
+      </div>
+    </div>
+    <div class="gate__card" role="main" aria-labelledby="gate-heading">
+      <div class="gate__card-glow" aria-hidden="true"></div>
+      <div class="gate__pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>LOCAL DEMO GATE</div>
+      <h1 class="gate__heading" id="gate-heading">Speak the secret<br>words to <em>enter.</em></h1>
+      <p class="gate__copy">This local gate is guarded by flame and memory. Speak the word and the beast will let you pass.</p>
+      <form id="login-form" class="gate__form" autocomplete="off" novalidate>
+        <label class="gate__label" for="secret-word">SECRET WORD</label>
+        <div class="gate__input-wrap" id="gate-input-wrap">
+          <input id="secret-word" name="secret-word" type="password" class="gate__input" placeholder="Whisper the word..." spellcheck="false" autocapitalize="none" autocomplete="off" aria-describedby="gate-feedback">
+          <button class="gate__eye-btn" id="gate-visibility" type="button" aria-label="Toggle visibility" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.2 12s3.3-6.4 9.8-6.4 9.8 6.4 9.8 6.4-3.3 6.4-9.8 6.4S2.2 12 2.2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></button>
+        </div>
+        <p class="gate__feedback" id="gate-feedback" role="alert" aria-live="assertive">The beast is watching.</p>
+        <button class="gate__btn" id="btn-enter-gate" type="submit"><span id="gate-btn-text">Enter the Gate</span><svg class="gate__btn-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <p class="gate__note">Local demo access only. Accepted words are trimmed, case-insensitive, and checked only in this client session.</p>
+      </form>
+    </div>
+    <div class="gate__badges">
+      <div class="gate__badge"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2L4 6v6c0 5 3.5 9.7 8 11 4.5-1.3 8-6 8-11V6l-8-4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span>LOCAL CAPTURE<small>Audio from your machine</small></span></div>
+      <div class="gate__badge"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>PRIVATE<small>Your data stays local</small></span></div>
+      <div class="gate__badge"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>SECURE<small>Config-based providers</small></span></div>
+      <div class="gate__badge"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span>FAST<small>Local or cloud engine</small></span></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ MAIN APP ═══════════════════ -->
+  <div class="app-shell" id="app-shell">
+    <div class="welcome-banner" id="welcome-banner">Welcome to Jamaluuu World</div>
+
+    <div class="app-container">
+      <!-- ─── Compact Header ─── -->
+      <header class="app-header" id="app-header">
+        <div class="app-header-left">
+          <div class="app-logo-icon" aria-hidden="true">
+            <svg viewBox="0 0 64 64"><defs><linearGradient id="studioMic" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff7a59"></stop><stop offset="100%" stop-color="#53d7ff"></stop></linearGradient></defs><path d="M21 40V24a11 11 0 1 1 22 0v16" fill="none" stroke="url(#studioMic)" stroke-width="5" stroke-linecap="round"></path><path d="M17 31a15 15 0 0 0 30 0" fill="none" stroke="#eef2ff" stroke-width="4" stroke-linecap="round"></path><path d="M32 46v7" fill="none" stroke="#eef2ff" stroke-width="4" stroke-linecap="round"></path></svg>
+          </div>
+          <div class="app-title-group">
+            <h1>Meeting Transcriber</h1>
+            <p class="app-subtitle">Local AI Transcription Studio</p>
+          </div>
+        </div>
+        <div class="app-header-right">
+          <div class="health-pill connection-indicator"><span class="connection-dot" id="connection-dot"></span><span id="connection-text">Connecting…</span></div>
+          <span class="status-badge" id="badge-transcription-provider">Checking transcription</span>
+          <span class="status-badge" id="badge-summary-provider">Checking summary</span>
+          <button class="btn btn-ghost btn-icon" id="btn-logout" type="button">Logout</button>
+        </div>
+      </header>
+
+      <!-- ─── Two-Column Workspace ─── -->
+      <div class="workspace-grid">
+
+        <!-- LEFT: Controls -->
+        <aside class="left-rail">
+          <!-- Meeting Controls -->
+          <section class="studio-card">
+            <div class="card-header"><h2>Meeting Controls</h2></div>
+            <div class="card-body card-stack">
+              <div class="service-pill" id="summary-status">Checking summary provider…</div>
+              <div class="form-group">
+                <label for="input-title">Meeting title</label>
+                <input type="text" id="input-title" class="form-input" placeholder="Auto-generate if blank">
+              </div>
+              <div class="form-group">
+                <label for="select-system-device">System audio device</label>
+                <select id="select-system-device" class="device-select"><option value="">Auto-detect</option></select>
+              </div>
+              <div class="toggle-group">
+                <div>
+                  <span class="toggle-label">Include microphone</span>
+                  <div class="toggle-device-meta">
+                    <span class="soft-pill" id="mic-selection-pill">Mic off</span>
+                    <p class="toggle-device-note" id="mic-device-note">Microphone status will appear here.</p>
+                  </div>
+                </div>
+                <label class="toggle-switch"><input type="checkbox" id="toggle-mic"><span class="toggle-slider"></span></label>
+              </div>
+              <div id="mic-device-group" class="mic-device-group">
+                <div class="form-group">
+                  <label for="select-mic-device">Microphone device</label>
+                  <select id="select-mic-device" class="device-select"><option value="">Auto-detect microphone</option></select>
+                </div>
+                <div class="mic-device-summary" id="mic-device-summary"></div>
+              </div>
+              <div class="recording-indicator" id="recording-indicator">
+                <span class="rec-dot"></span>
+                <span class="rec-text">Recording live</span>
+                <span class="rec-timer" id="rec-timer">00:00</span>
+              </div>
+              <div class="primary-actions">
+                <button class="btn btn-primary btn-start" id="btn-start" type="button">Start transcription</button>
+                <button class="btn btn-danger btn-stop hidden" id="btn-stop" type="button">Stop transcription</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Audio File Upload -->
+          <section class="studio-card studio-card-accent">
+            <div class="card-header"><h2>Audio File</h2></div>
+            <div class="card-body card-stack">
+              <label class="file-picker" for="input-audio-file">
+                <input type="file" id="input-audio-file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.webm">
+                <span class="file-picker-title">Choose local audio file</span>
+                <span class="file-picker-subtitle">Zoom recordings, interviews, lectures, voice notes</span>
+              </label>
+              <div class="file-meta-card">
+                <div class="file-meta-head">
+                  <span class="soft-pill" id="upload-status-pill">No file selected</span>
+                  <span class="file-size" id="audio-file-size">0 B</span>
+                </div>
+                <strong class="file-name" id="audio-file-name">No file selected</strong>
+                <p class="file-meta-copy" id="audio-file-meta">Select a recording to transcribe.</p>
+                <div class="progress-track" id="upload-progress-track"><div class="progress-fill" id="upload-progress-fill"></div></div>
+              </div>
+              <div class="form-group">
+                <label for="input-upload-title">Title</label>
+                <input type="text" id="input-upload-title" class="form-input" placeholder="Auto-fills from file name">
+              </div>
+              <button class="btn btn-secondary btn-upload" id="btn-upload-audio" type="button">Transcribe audio file</button>
+              <p class="upload-helper" id="upload-helper-text">File transcription gives cleaner results than live capture.</p>
+            </div>
+          </section>
+
+          <!-- Exports (moved from right rail) -->
+          <section class="studio-card">
+            <div class="card-header"><h2>Export</h2></div>
+            <div class="card-body card-stack">
+              <div class="export-group">
+                <div class="export-group-header"><span>Transcript</span><small>TXT · MD · DOCX · PDF</small></div>
+                <div class="export-grid">
+                  <button class="btn btn-export" data-export="transcript-txt" type="button">TXT</button>
+                  <button class="btn btn-export" data-export="transcript-md" type="button">MD</button>
+                  <button class="btn btn-export" data-export="transcript-docx" type="button">DOCX</button>
+                  <button class="btn btn-export" data-export="transcript-pdf" type="button">PDF</button>
+                </div>
+              </div>
+              <div class="export-group">
+                <div class="export-group-header"><span>Summary</span><small>TXT · MD · DOCX · PDF</small></div>
+                <div class="export-grid">
+                  <button class="btn btn-export" data-export="summary-txt" type="button">TXT</button>
+                  <button class="btn btn-export" data-export="summary-md" type="button">MD</button>
+                  <button class="btn btn-export" data-export="summary-docx" type="button">DOCX</button>
+                  <button class="btn btn-export" data-export="summary-pdf" type="button">PDF</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        <!-- CENTER: Transcript + Summary -->
+        <main class="center-stage">
+          <!-- Transcript Panel -->
+          <section class="studio-card transcript-panel">
+            <div class="card-header transcript-header">
+              <div>
+                <p class="panel-kicker">Live Transcript</p>
+                <h2 id="current-meeting-title">Ready to transcribe</h2>
+              </div>
+              <div class="transcript-header-tools">
+                <div class="search-shell">
+                  <input type="search" id="transcript-search" class="search-input" placeholder="Search transcript">
+                  <button class="btn btn-ghost btn-search-clear" id="btn-clear-search" type="button">Clear</button>
+                  <span class="match-count" id="transcript-match-count">0 matches</span>
+                </div>
+                <div class="toolbar-actions">
+                  <button class="btn btn-primary btn-inline" id="btn-start-inline" type="button">Start</button>
+                  <button class="btn btn-ghost btn-inline" id="btn-pause" type="button" title="Pause is not yet supported">Pause</button>
+                  <button class="btn btn-danger btn-inline" id="btn-stop-inline" type="button">Stop</button>
+                  <button class="btn btn-ghost btn-inline" id="btn-copy-transcript" type="button">Copy</button>
+                  <button class="btn btn-ghost btn-inline" id="btn-clear-transcript" type="button">Clear</button>
+                  <details class="shortcut-popover">
+                    <summary>Shortcuts</summary>
+                    <div class="shortcut-panel">
+                      <div><kbd>Ctrl/Cmd</kbd><span>+</span><kbd>Enter</kbd><span>Start</span></div>
+                      <div><kbd>Esc</kbd><span></span><span>Stop</span></div>
+                      <div><kbd>Ctrl/Cmd</kbd><span>+</span><kbd>F</kbd><span>Search</span></div>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+
+            <div class="transcript-activity" id="transcript-activity">
+              <div class="wave-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="activity-copy">
+                <strong id="activity-label">Ready</strong>
+                <p id="activity-meta">Providers idle, waiting for the next session.</p>
+              </div>
+            </div>
+
+            <div class="transcript-area" id="transcript-area">
+              <div class="transcript-empty">
+                <div class="transcript-empty-icon">◎</div>
+                <h3>Ready to transcribe</h3>
+                <p>Start a live capture or upload a recording.</p>
+              </div>
+            </div>
+
+            <div class="stats-bar">
+              <div class="stat-item"><span class="stat-label">Words</span><strong class="stat-value" id="stat-words">0</strong></div>
+              <div class="stat-item"><span class="stat-label">Segments</span><strong class="stat-value" id="stat-segments">0</strong></div>
+              <div class="stat-item"><span class="stat-label">Unclear</span><strong class="stat-value" id="stat-unclear">0</strong></div>
+              <div class="stat-item"><span class="stat-label">Duration</span><strong class="stat-value" id="stat-duration">00:00</strong></div>
+              <div class="stat-item"><span class="stat-label">Confidence</span><strong class="stat-value" id="stat-confidence">n/a</strong></div>
+              <div class="stat-item"><span class="stat-label">Matches</span><strong class="stat-value" id="stat-matches">0</strong></div>
+            </div>
+
+            <div class="status-bar" id="status-bar">
+              <span class="status-icon" id="status-icon">i</span>
+              <span class="status-text">Ready. Capture connected and providers standing by.</span>
+            </div>
+          </section>
+
+          <!-- Summary Panel -->
+          <section class="studio-card summary-panel" id="summary-panel">
+            <div class="card-header">
+              <div>
+                <p class="panel-kicker">Summary Studio</p>
+                <h2>Meeting Summary</h2>
+              </div>
+              <div class="summary-metrics">
+                <span class="summary-metric">Words <strong id="final-words">0</strong></span>
+                <span class="summary-metric">Speakers <strong id="final-speakers">0</strong></span>
+                <span class="summary-metric">Unclear <strong id="final-unclear">0</strong></span>
+              </div>
+            </div>
+            <div class="summary-placeholder" id="summary-placeholder">
+              <div class="summary-placeholder-icon">✦</div>
+              <h3 id="summary-placeholder-title">Summary ready when the transcript is complete</h3>
+              <p id="summary-placeholder-text">Stop a live session or finish an uploaded file to generate key points, action items, decisions, and follow-ups.</p>
+              <div class="summary-loading-dots hidden" id="summary-loading-dots"><span></span><span></span><span></span></div>
+            </div>
+            <div class="summary-content hidden" id="summary-content">
+              <section class="summary-tile summary-tile-wide"><h3>Summary</h3><div class="summary-note hidden" id="summary-note"></div><p class="summary-text" id="summary-text">Generating summary…</p></section>
+              <section class="summary-tile"><h3>Key Points</h3><ul class="summary-list" id="summary-key-points"></ul></section>
+              <section class="summary-tile"><h3>Decisions</h3><ul class="summary-list" id="summary-decisions"></ul></section>
+              <section class="summary-tile"><h3>Action Items</h3><div class="summary-actions" id="summary-actions"></div></section>
+              <section class="summary-tile"><h3>Follow-ups</h3><ul class="summary-list" id="summary-questions"></ul></section>
+            </div>
+          </section>
+        </main>
+
+        <!-- RIGHT: Past Meetings + Audio Diagnostics (collapsed) -->
+        <aside class="right-rail">
+          <section class="studio-card">
+            <div class="card-header">
+              <h2>Past Meetings</h2>
+              <button class="btn btn-ghost btn-icon" id="btn-refresh-history" type="button">Refresh</button>
+            </div>
+            <div class="meeting-list" id="meeting-list">
+              <div class="transcript-empty compact-empty">
+                <div class="transcript-empty-icon">◌</div>
+                <h3>No meetings yet</h3>
+                <p>Completed sessions appear here.</p>
+              </div>
+            </div>
+          </section>
+
+          <details class="studio-card diagnostics-collapse">
+            <summary class="card-header diag-toggle">
+              <h2>Audio Diagnostics</h2>
+              <button class="btn btn-ghost btn-icon" id="btn-refresh-audio" type="button">Refresh</button>
+            </summary>
+            <div class="card-body card-stack">
+              <div class="audio-debug-pill" id="audio-debug-pill">Checking audio route…</div>
+              <div class="audio-debug-grid">
+                <div class="audio-debug-row"><span class="audio-debug-label">Capture target</span><span class="audio-debug-value" id="audio-route-target">-</span></div>
+                <div class="audio-debug-row"><span class="audio-debug-label">System path</span><span class="audio-debug-value" id="audio-route-system">-</span></div>
+                <div class="audio-debug-row"><span class="audio-debug-label">Mic path</span><span class="audio-debug-value" id="audio-route-mic">-</span></div>
+                <div class="audio-debug-row"><span class="audio-debug-label">Default sink</span><span class="audio-debug-value" id="audio-route-sink">-</span></div>
+                <div class="audio-debug-row"><span class="audio-debug-label">Meeting streams</span><span class="audio-debug-value" id="audio-route-streams">-</span></div>
+              </div>
+              <p class="audio-debug-note" id="audio-route-note">Diagnostic card for verifying the capture route.</p>
+            </div>
+          </details>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden hero elements referenced by JS (kept for compatibility) -->
+  <div style="display:none">
+    <span id="hero-meeting-title"></span>
+    <span id="hero-meeting-subtitle"></span>
+    <span id="hero-status-text"></span>
+    <span id="hero-mode-text"></span>
+    <span id="hero-summary-text"></span>
+    <span id="hero-route-text"></span>
+    <span id="header-summary-text"></span>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/js/websocket.js"></script>
+  <script src="/js/export.js"></script>
+  <script src="/js/beast-gate.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Preferred spellings for names, teams, products, and project terms.
+# Format:
+# Canonical Term | variant 1, variant 2, variant 3
+
+Balaji | bala ji, balajee, balagy
+Rajesh | rajesh, rajeshh
+Swaib | swayeb, swaieb, swaibh, suwaib
+Ismail | ismail, ismaeel, ismayil
+Panchankar | panchankar, panchanakar, panjankar
+Peter | peter
+Kevin | kevin
+John | john
+Krish | krish, krishna
+Joel | joel, joyel
+Vizley | visley, vizli, visli
+
+ClickUp | click up, clickup
+CloudWatch | cloud watch, cloudwatch
+S3 | s 3, s-three, एस3
+Terraform | terra form, terraforming, terra forming
+GitHub | git hub, github
+eBay | ebay, e bay
+Shopify | shopify, shop pee fy
+Amazon | amazon
+AWS | a w s, aws
+API | a p i, api
