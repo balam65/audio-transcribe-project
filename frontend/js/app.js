@@ -578,6 +578,7 @@ const App = {
     const systemCapture = activeCapture.find((item) => item.source_type === 'system');
     const micCapture = activeCapture.find((item) => item.source_type === 'microphone');
     const meetingStreams = (data.meeting_streams || []).join(', ') || 'None detected';
+    const qualityWarning = data.quality_warning || '';
 
     if (data.recording) {
       pill.classList.add('live');
@@ -599,7 +600,9 @@ const App = {
     sink.textContent = data.default_sink || 'Unknown';
     streams.textContent = meetingStreams;
 
-    if (data.capture_target === 'meeting_stream') {
+    if (qualityWarning) {
+      note.textContent = qualityWarning;
+    } else if (data.capture_target === 'meeting_stream') {
       note.textContent = 'Best case: the app can see a direct meeting stream like Zoom.';
     } else if (meetingStreams !== 'None detected') {
       note.textContent = 'A meeting app exists, but capture is falling back to the active sink monitor.';

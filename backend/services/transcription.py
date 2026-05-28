@@ -602,6 +602,19 @@ def _build_chunk_transcription_prompt() -> str:
     return "\n\n".join(part.strip() for part in parts if part.strip())
 
 
+def _build_live_chunk_transcription_prompt(previous_tail: str = "") -> str:
+    """Compose a continuity-aware prompt for overlapped live windows."""
+
+    parts = [_build_chunk_transcription_prompt()]
+    if previous_tail:
+        parts.append(
+            "Recent transcript tail for continuity only. Use it to continue the sentence naturally, "
+            "but do not repeat words that were already transcribed in the earlier live chunk:\n"
+            f"{previous_tail}"
+        )
+    return "\n\n".join(part.strip() for part in parts if part.strip())
+
+
 def _estimate_cloud_confidence(
     text: str,
     audio_data: Optional[np.ndarray] = None,
@@ -910,6 +923,7 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
 
     def __init__(self):
         self._loaded = False
+        self._live_prompt_tail = ""
 
     def load_model(self):
         status = get_transcription_provider_status()
@@ -932,12 +946,24 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
         text = self._transcribe_bytes(
             _numpy_audio_to_wav_bytes(audio_data),
             filename="live-chunk.wav",
+            prompt=_build_live_chunk_transcription_prompt(self._live_prompt_tail),
+            timeout_override=min(
+                float(config.OPENAI_TIMEOUT_SECONDS),
+                max(float(config.LIVE_TRANSCRIPTION_TIMEOUT_SECONDS), duration + 4.0),
+            ),
+            max_attempts_override=max(1, int(config.LIVE_TRANSCRIPTION_MAX_RETRIES) + 1),
         )
+        cleaned_text = _apply_glossary_corrections(re.sub(r"\s+", " ", str(text or "")).strip())
+        confidence = _estimate_cloud_confidence(cleaned_text, audio_data=audio_data, duration=duration)
+        if cleaned_text and not _is_hallucination_text(cleaned_text):
+            if confidence >= max(config.CONFIDENCE_THRESHOLD, 0.58) and len(cleaned_text.split()) >= 3:
+                merged_tail = f"{self._live_prompt_tail} {cleaned_text}".strip()
+                self._live_prompt_tail = _extract_prompt_tail(merged_tail, max_words=24)
         return self._build_segments_from_text(
-            text,
+            cleaned_text,
             time_offset,
             duration,
-            confidence=_estimate_cloud_confidence(text, audio_data=audio_data, duration=duration),
+            confidence=confidence,
         )
 
     def transcribe_file(self, file_path: str | Path) -> list[TranscriptSegment]:
@@ -991,9 +1017,22 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
 
         return merged_text.strip()
 
-    def _transcribe_bytes(self, audio_bytes: bytes, filename: str, prompt: Optional[str] = None) -> str:
+    def _transcribe_bytes(
+        self,
+        audio_bytes: bytes,
+        filename: str,
+        prompt: Optional[str] = None,
+        timeout_override: Optional[float] = None,
+        max_attempts_override: Optional[int] = None,
+    ) -> str:
         if _is_openrouter_base_url():
-            return self._transcribe_bytes_openrouter(audio_bytes, filename, prompt)
+            return self._transcribe_bytes_openrouter(
+                audio_bytes,
+                filename,
+                prompt,
+                timeout_override=timeout_override,
+                max_attempts_override=max_attempts_override,
+            )
 
         endpoint = (
             "audio/translations"
@@ -1015,6 +1054,8 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
             headers=headers,
             data=data,
             files={"file": (filename, audio_bytes, "audio/wav")},
+            timeout_override=timeout_override,
+            max_attempts_override=max_attempts_override,
         )
 
         if response.status_code != 200:
@@ -1028,7 +1069,14 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
             text = str(text or "")
         return _apply_glossary_corrections(text.strip())
 
-    def _transcribe_bytes_openrouter(self, audio_bytes: bytes, filename: str, prompt: Optional[str] = None) -> str:
+    def _transcribe_bytes_openrouter(
+        self,
+        audio_bytes: bytes,
+        filename: str,
+        prompt: Optional[str] = None,
+        timeout_override: Optional[float] = None,
+        max_attempts_override: Optional[int] = None,
+    ) -> str:
         """Send speech-to-text requests using OpenRouter's documented STT format."""
 
         headers = {
@@ -1049,6 +1097,8 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
             f"{config.OPENAI_BASE_URL.rstrip('/')}/audio/transcriptions",
             headers=headers,
             json=payload,
+            timeout_override=timeout_override,
+            max_attempts_override=max_attempts_override,
         )
 
         if response.status_code != 200:
@@ -1161,16 +1211,31 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
         text = _apply_glossary_corrections(str(payload.get("text", "") or "").strip())
         return self._build_segments_from_full_transcript(text, total_duration)
 
-    def _post_with_retries(self, url: str, **kwargs) -> httpx.Response:
+    def _post_with_retries(
+        self,
+        url: str,
+        timeout_override: Optional[float] = None,
+        max_attempts_override: Optional[int] = None,
+        **kwargs,
+    ) -> httpx.Response:
         """Retry transient upstream failures before surfacing an error."""
 
         last_response: Optional[httpx.Response] = None
-        max_attempts = max(1, config.OPENAI_TRANSCRIPTION_MAX_RETRIES + 1)
+        max_attempts = (
+            max(1, int(max_attempts_override))
+            if max_attempts_override is not None
+            else max(1, config.OPENAI_TRANSCRIPTION_MAX_RETRIES + 1)
+        )
+        timeout = (
+            float(timeout_override)
+            if timeout_override is not None
+            else float(config.OPENAI_TIMEOUT_SECONDS)
+        )
 
         for attempt in range(1, max_attempts + 1):
             response = httpx.post(
                 url,
-                timeout=config.OPENAI_TIMEOUT_SECONDS,
+                timeout=timeout,
                 **kwargs,
             )
             if response.status_code not in {429, 502, 503, 504}:
@@ -1413,11 +1478,29 @@ class TranscriptionService:
         if not cleaned or _is_hallucination_text(cleaned):
             return "", True
 
-        # Keep fast path for already-clean English when confidence is healthy.
+        words = cleaned.split()
         non_ascii_chars = sum(1 for char in cleaned if ord(char) > 127)
         non_ascii_ratio = (non_ascii_chars / len(cleaned)) if cleaned else 0.0
-        if non_ascii_ratio < 0.05 and confidence >= 0.82 and len(cleaned.split()) >= 3:
+
+        # For normal English live audio, never let a chat model rewrite the wording.
+        # That can turn noisy Zoom chunks into fluent but incorrect sentences.
+        if non_ascii_ratio < 0.08:
+            if confidence < max(config.CONFIDENCE_THRESHOLD, 0.52) and len(words) <= 4:
+                return "", True
             return cleaned, False
+
+        # If the user wants conservative live translation only, keep risky mixed chunks raw
+        # unless they are clearly non-English and reasonably confident.
+        if config.LIVE_NORMALIZE_NON_ENGLISH_ONLY:
+            if non_ascii_ratio < 0.18:
+                if confidence < max(config.CONFIDENCE_THRESHOLD, 0.58):
+                    return "", True
+                return cleaned, False
+
+            # For clear non-English output we allow translation, but only when the
+            # upstream speech model seemed reasonably sure there was actual speech.
+            if confidence < 0.58 and len(words) <= 6:
+                return "", True
 
         if not config.OPENAI_API_KEY:
             return cleaned, False

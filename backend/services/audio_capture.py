@@ -31,6 +31,16 @@ MEETING_STREAM_HINTS = (
 )
 BLUETOOTH_DEVICE_HINTS = ("bluetooth", "airpods", "buds", "a2dp", "hfp", "hsp", "wf-", "wh-")
 WIRED_DEVICE_HINTS = ("headset", "headphone", "earphone", "usb", "jack", "analog", "line in", "line-in")
+LOW_BANDWIDTH_BLUETOOTH_HINTS = (
+    "handsfree",
+    "headset-head-unit",
+    "headset",
+    "hfp",
+    "hsp",
+    "sco",
+    "msbc",
+    "cvsd",
+)
 
 os.environ.setdefault("JACK_NO_START_SERVER", "1")
 
@@ -156,6 +166,13 @@ def find_monitor_device() -> Optional[dict]:
     devices = list_audio_devices()
     monitors = [d for d in devices if d["is_monitor"]]
     if monitors:
+        monitors.sort(
+            key=lambda device: (
+                _monitor_quality_penalty(device.get("name", "")),
+                -(device.get("sample_rate") or 0),
+                -(device.get("channels") or 0),
+            )
+        )
         return monitors[0]
     
     # Robust fallback for PipeWire / PulseAudio virtual devices
@@ -174,12 +191,47 @@ def find_default_mic() -> Optional[dict]:
     """Find the default microphone device."""
     devices = list_audio_devices()
     default_inputs = [d for d in devices if d.get("is_default_input")]
+    ranked_mics = sorted(
+        [d for d in devices if not d["is_monitor"]],
+        key=lambda device: (
+            _mic_quality_penalty(device),
+            -(device.get("sample_rate") or 0),
+            -(device.get("channels") or 0),
+        )
+    )
     if default_inputs:
-        return default_inputs[0]
+        default_input = default_inputs[0]
+        if _mic_quality_penalty(default_input) <= 1:
+            return default_input
+        if ranked_mics:
+            return ranked_mics[0]
     mics = [d for d in devices if not d["is_monitor"]]
     if mics:
-        return mics[0]
+        return ranked_mics[0] if ranked_mics else mics[0]
     return None
+
+
+def _monitor_quality_penalty(device_name: str) -> int:
+    """Lower scores are better for transcription capture."""
+    name_lower = (device_name or "").lower()
+    penalty = 0
+    if any(hint in name_lower for hint in LOW_BANDWIDTH_BLUETOOTH_HINTS):
+        penalty += 3
+    elif "bluez" in name_lower or any(hint in name_lower for hint in BLUETOOTH_DEVICE_HINTS):
+        penalty += 1
+    return penalty
+
+
+def _mic_quality_penalty(device: dict) -> int:
+    """Prefer wired/built-in microphones over narrowband Bluetooth by default."""
+    name_lower = str(device.get("name") or "").lower()
+    connection = str(device.get("connection") or "").lower()
+    penalty = 0
+    if connection == "bluetooth":
+        penalty += 2
+    if any(hint in name_lower for hint in LOW_BANDWIDTH_BLUETOOTH_HINTS):
+        penalty += 3
+    return penalty
 
 
 def _get_device_info(pa: "pyaudio.PyAudio", device_index: int) -> dict:
@@ -275,6 +327,14 @@ def _get_default_source_node_name() -> Optional[str]:
     return None
 
 
+def _looks_like_low_bandwidth_bluetooth(label: Optional[str]) -> bool:
+    """Detect headset profiles that usually crush meeting audio quality."""
+    text = (label or "").lower()
+    if not text:
+        return False
+    return any(hint in text for hint in LOW_BANDWIDTH_BLUETOOTH_HINTS)
+
+
 def _get_meeting_stream_ports(output_ports: list[str]) -> tuple[Optional[str], Optional[str]]:
     """Prefer direct meeting app streams when available."""
     for hint in MEETING_STREAM_HINTS:
@@ -297,6 +357,49 @@ def _get_meeting_stream_names(output_ports: list[str]) -> list[str]:
             if stream_name not in matches:
                 matches.append(stream_name)
     return matches
+
+
+def _choose_capture_target_ports(output_ports: list[str]) -> tuple[str, Optional[str], Optional[str]]:
+    """Prefer direct meeting streams over sink monitors when available."""
+    meeting_left, meeting_right = _get_meeting_stream_ports(output_ports)
+    if meeting_left or meeting_right:
+        return "meeting_stream", meeting_left, meeting_right
+
+    monitor_left, monitor_right = _get_monitor_ports(output_ports)
+    if monitor_left or monitor_right:
+        return "sink_monitor", monitor_left, monitor_right
+
+    return "none", None, None
+
+
+def _build_quality_warning(
+    capture_target: str,
+    default_sink: Optional[str],
+    default_source: Optional[str],
+    meeting_streams: list[str],
+) -> Optional[str]:
+    """Explain common Bluetooth quality traps that hurt live transcription."""
+    if capture_target == "meeting_stream":
+        return None
+
+    sink_low_bw = _looks_like_low_bandwidth_bluetooth(default_sink)
+    source_low_bw = _looks_like_low_bandwidth_bluetooth(default_source)
+    meeting_has_zoom = any("zoom" in stream.lower() for stream in meeting_streams)
+
+    if sink_low_bw or source_low_bw:
+        return (
+            "Bluetooth is using a hands-free headset profile, which usually drops meeting audio to "
+            "narrow-band mono. That makes live transcription miss words. Switch Zoom to a built-in or wired mic, "
+            "or keep the Bluetooth device for output only."
+        )
+
+    if meeting_has_zoom:
+        return (
+            "Zoom is running, but capture fell back to the full sink monitor instead of the direct meeting stream. "
+            "That can include extra system noise and lower intelligibility."
+        )
+
+    return None
 
 
 def _get_monitor_ports(output_ports: list[str]) -> tuple[Optional[str], Optional[str]]:
@@ -351,9 +454,14 @@ def get_audio_debug_snapshot(
     output_ports = _run_command(["pw-link", "-o"]).splitlines()
     default_sink = _get_default_sink_node_name()
     default_source = _get_default_source_node_name()
-    meeting_left, meeting_right = _get_meeting_stream_ports(output_ports)
-    monitor_left, monitor_right = _get_monitor_ports(output_ports)
-    capture_target = "sink_monitor" if (monitor_left or monitor_right) else "meeting_stream"
+    meeting_streams = _get_meeting_stream_names(output_ports)
+    capture_target, target_left, target_right = _choose_capture_target_ports(output_ports)
+    quality_warning = _build_quality_warning(
+        capture_target=capture_target,
+        default_sink=default_sink,
+        default_source=default_source,
+        meeting_streams=meeting_streams,
+    )
 
     return {
         "selected_system_device": _describe_device_by_index(selected_system_device_index),
@@ -363,11 +471,12 @@ def get_audio_debug_snapshot(
         "default_source": default_source,
         "connected_bluetooth_devices": _get_connected_bluetooth_devices(),
         "bluetooth_devices": _get_bluetooth_device_inventory(),
-        "meeting_streams": _get_meeting_stream_names(output_ports),
+        "meeting_streams": meeting_streams,
         "capture_target": capture_target,
+        "quality_warning": quality_warning,
         "target_ports": {
-            "left": monitor_left or meeting_left,
-            "right": monitor_right or meeting_right,
+            "left": target_left,
+            "right": target_right,
         },
     }
 
@@ -393,6 +502,10 @@ class AudioCaptureStream:
         self.device_index = device_index
         self.source_type = source_type
         self.chunk_duration = chunk_duration or config.AUDIO_CHUNK_DURATION
+        self.step_duration = max(
+            1.0,
+            min(float(config.AUDIO_CHUNK_STEP_DURATION), float(self.chunk_duration)),
+        )
         self.sample_rate = config.SAMPLE_RATE
         self.channels = config.CHANNELS
 
@@ -409,7 +522,7 @@ class AudioCaptureStream:
 
         # Track timing for offset calculation
         self._start_time: float = 0.0
-        self._chunks_sent: int = 0
+        self._windows_emitted: int = 0
 
     def start(self, callback: Callable):
         """
@@ -424,7 +537,7 @@ class AudioCaptureStream:
         self._callback = callback
         self._running = True
         self._start_time = time.time()
-        self._chunks_sent = 0
+        self._windows_emitted = 0
         self._buffer = bytearray()
 
         with _suppress_audio_backend_stderr():
@@ -456,7 +569,8 @@ class AudioCaptureStream:
         self._thread.start()
         logger.info(
             f"Audio capture started: {self.source_type} ({self._device_name}, "
-            f"{self._input_rate}Hz/{self._input_channels}ch)"
+            f"{self._input_rate}Hz/{self._input_channels}ch, "
+            f"window={self.chunk_duration:.1f}s, step={self.step_duration:.1f}s)"
         )
 
         # For system capture on PipeWire, run auto-linker in a background thread
@@ -482,13 +596,11 @@ class AudioCaptureStream:
             app_fr = app_fr or next((p for p in input_ports if "input_FR" in p), None)
             app_mono = app_mono or next((p for p in input_ports if "input_MONO" in p), None)
 
-            target_fl, target_fr = _get_monitor_ports(output_ports)
-            if target_fl or target_fr:
-                logger.info("PipeWire auto-link: capturing active sink monitor")
-            else:
-                target_fl, target_fr = _get_meeting_stream_ports(output_ports)
-                if target_fl or target_fr:
-                    logger.info("PipeWire auto-link: falling back to direct meeting app stream")
+            capture_target, target_fl, target_fr = _choose_capture_target_ports(output_ports)
+            if capture_target == "meeting_stream":
+                logger.info("PipeWire auto-link: capturing direct meeting app stream")
+            elif capture_target == "sink_monitor":
+                logger.info("PipeWire auto-link: falling back to active sink monitor")
 
             if target_fl and app_fl:
                 logger.info(f"Auto-linking PipeWire: {target_fl} -> {app_fl}")
@@ -508,7 +620,9 @@ class AudioCaptureStream:
     def _capture_loop(self):
         """Main capture loop running in a background thread."""
         frames_per_chunk = int(self._input_rate * self.chunk_duration)
+        frames_per_step = int(self._input_rate * self.step_duration)
         bytes_per_chunk = frames_per_chunk * 2 * self._input_channels  # int16 * channels
+        bytes_per_step = max(2 * self._input_channels, frames_per_step * 2 * self._input_channels)
 
         while self._running:
             try:
@@ -519,16 +633,19 @@ class AudioCaptureStream:
                 )
                 self._buffer.extend(data)
 
-                # When we have enough data for one chunk, process it
+                # When we have enough data for one full window, emit it and only
+                # advance by the configured step. This preserves overlap between
+                # consecutive windows so live speech is less likely to be chopped.
                 while len(self._buffer) >= bytes_per_chunk:
                     chunk_bytes = bytes(self._buffer[:bytes_per_chunk])
-                    self._buffer = self._buffer[bytes_per_chunk:]
+                    trim = min(bytes_per_step, len(self._buffer))
+                    self._buffer = self._buffer[trim:]
 
                     audio_np = self._prepare_audio(chunk_bytes)
 
                     # Calculate time offset
-                    offset = self._chunks_sent * self.chunk_duration
-                    self._chunks_sent += 1
+                    offset = self._windows_emitted * self.step_duration
+                    self._windows_emitted += 1
 
                     # Call the callback with audio data, offset, and source type
                     if self._callback:
@@ -584,12 +701,16 @@ class AudioCaptureStream:
             except Exception:
                 pass
 
-        # Process any remaining audio in the buffer
-        if self._buffer and self._callback:
+        # Process a final tail window only if enough buffered audio remains to
+        # be meaningful; otherwise very short tails tend to create junk text.
+        frames_per_chunk = int(self._input_rate * self.chunk_duration)
+        bytes_per_chunk = frames_per_chunk * 2 * self._input_channels
+        min_tail_bytes = int(bytes_per_chunk * 0.65)
+        if self._buffer and self._callback and len(self._buffer) >= min_tail_bytes:
             remaining = bytes(self._buffer)
             if len(remaining) >= 2:
                 audio_np = self._prepare_audio(remaining)
-                offset = self._chunks_sent * self.chunk_duration
+                offset = self._windows_emitted * self.step_duration
                 self._callback(audio_np, offset, self.source_type)
 
         logger.info(f"Audio capture stopped: {self.source_type}")
@@ -610,6 +731,8 @@ class AudioCaptureStream:
             "device_name": self._device_name,
             "input_rate": self._input_rate,
             "input_channels": self._input_channels,
+            "chunk_duration": self.chunk_duration,
+            "step_duration": self.step_duration,
         }
 
 
@@ -629,7 +752,7 @@ class CombinedAudioCapture:
         self._pending_received_at: dict[int, float] = {}
         self.system_device_index: Optional[int] = None
         self.mic_device_index: Optional[int] = None
-        self._chunk_duration = float(config.AUDIO_CHUNK_DURATION)
+        self._chunk_duration = float(config.AUDIO_CHUNK_STEP_DURATION)
 
     def setup(
         self,

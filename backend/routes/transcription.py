@@ -53,6 +53,8 @@ class TranscriptionSession:
         self.segment_index = 0
         self.is_running = False
         self.websocket: Optional[WebSocket] = None
+        self._client_connected = True
+        self._finalizing = False
 
         self.audio_capture = CombinedAudioCapture()
         self.transcription = TranscriptionService()
@@ -101,6 +103,18 @@ class TranscriptionSession:
 
         # Start audio capture with callback
         self.audio_capture.start(callback=self._on_audio_chunk)
+
+        snapshot = self.audio_capture.get_debug_snapshot()
+        capture_target = snapshot.get("capture_target")
+        quality_warning = snapshot.get("quality_warning")
+
+        if capture_target == "meeting_stream":
+            await self._send_status("Using direct meeting stream capture for the cleanest live audio.")
+        elif capture_target == "sink_monitor":
+            await self._send_status("Using sink monitor capture. Direct meeting stream was not visible.")
+
+        if quality_warning:
+            await self._send_status(quality_warning)
 
         await self._send_status("Transcription started. Listening...")
 
@@ -162,7 +176,7 @@ class TranscriptionSession:
                     self.segment_index += 1
 
                     # Send to WebSocket asynchronously
-                    if self._loop and self.websocket:
+                    if self._loop and self.websocket and self._client_connected:
                         asyncio.run_coroutine_threadsafe(
                             self._send_segment(seg_dict),
                             self._loop,
@@ -202,25 +216,51 @@ class TranscriptionSession:
         return seg.is_unclear
 
     def _should_drop_as_duplicate(self, seg: TranscriptSegment, source_type: str) -> bool:
-        """Drop near-duplicate segments across lanes in the same time window."""
+        """Drop near-duplicate segments across lanes and trim overlap from sliding windows."""
         text = self._normalize_compare_text(seg.text)
         if not text:
             return True
 
         for existing in reversed(self.segments[-8:]):
-            if abs(float(existing.get("start_time", 0.0)) - seg.start_time) > 1.2:
+            time_gap = abs(float(existing.get("start_time", 0.0)) - seg.start_time)
+            if time_gap > 4.2:
                 continue
 
             existing_source = existing.get("source_type", "")
-            if existing_source == source_type:
-                continue
-
             existing_text = self._normalize_compare_text(existing.get("text", ""))
             if not existing_text:
                 continue
 
             similarity = difflib.SequenceMatcher(None, text, existing_text).ratio()
             token_overlap = self._token_overlap_ratio(text, existing_text)
+
+            if existing_source == source_type:
+                trimmed = self._trim_duplicate_prefix(seg.text, existing.get("text", ""))
+                trimmed_norm = self._normalize_compare_text(trimmed)
+
+                if similarity >= 0.9 or token_overlap >= 0.9:
+                    return True
+
+                if (
+                    time_gap <= max(3.5, float(config.AUDIO_CHUNK_STEP_DURATION) + 0.8)
+                    and len(text.split()) <= 6
+                    and (similarity >= 0.72 or token_overlap >= 0.65)
+                ):
+                    return True
+
+                if trimmed_norm and trimmed_norm != text:
+                    seg.text = trimmed
+                    text = trimmed_norm
+                    if len(text.split()) < 2:
+                        return True
+                    continue
+
+                if (
+                    time_gap <= max(3.5, float(config.AUDIO_CHUNK_STEP_DURATION) + 0.8)
+                    and (text in existing_text or existing_text in text)
+                ):
+                    return True
+                continue
 
             if similarity >= 0.86 or token_overlap >= 0.82:
                 # Prefer the meeting lane when both lanes say essentially the same thing.
@@ -285,8 +325,38 @@ class TranscriptionSession:
             return 0.0
         return len(left_tokens & right_tokens) / max(1, min(len(left_tokens), len(right_tokens)))
 
-    async def stop(self) -> dict:
+    def _trim_duplicate_prefix(self, incoming: str, existing: str) -> str:
+        """Remove a repeated prefix from an overlapped live window."""
+        incoming_tokens = str(incoming or "").split()
+        existing_tokens = str(existing or "").split()
+        if len(incoming_tokens) < 4 or len(existing_tokens) < 4:
+            return incoming
+
+        normalized_incoming = [self._normalize_compare_text(token) for token in incoming_tokens]
+        normalized_existing = [self._normalize_compare_text(token) for token in existing_tokens]
+
+        max_overlap = min(len(normalized_existing), len(normalized_incoming), 18)
+        for overlap in range(max_overlap, 2, -1):
+            existing_phrase = " ".join(normalized_existing[-overlap:])
+            incoming_phrase = " ".join(normalized_incoming[:overlap])
+            similarity = difflib.SequenceMatcher(None, existing_phrase, incoming_phrase).ratio()
+
+            if existing_phrase == incoming_phrase or (overlap >= 4 and similarity >= 0.84):
+                trimmed = " ".join(incoming_tokens[overlap:]).strip()
+                return trimmed
+
+        return incoming
+
+    def mark_client_disconnected(self):
+        """Stop attempting websocket sends once the client is gone."""
+        self._client_connected = False
+
+    async def stop(self, notify_client: bool = True) -> dict:
         """Stop the transcription session and generate summary."""
+        if self._finalizing:
+            return {}
+
+        self._finalizing = True
         self.is_running = False
         self.audio_capture.stop()
 
@@ -298,7 +368,8 @@ class TranscriptionSession:
                 None, self._worker_thread.join, 5.0
             )
 
-        await self._send_status("Transcription stopped. Generating summary...")
+        if notify_client:
+            await self._send_status("Transcription stopped. Generating summary...")
 
         # Build full transcript
         transcript = build_full_transcript(self.segments)
@@ -325,51 +396,54 @@ class TranscriptionSession:
         )
 
         # Send summary to client
-        await self._send_message({
-            "type": "summary",
-            "data": {
-                "summary": summary_data,
-                "stats": {
-                    "word_count": word_count,
-                    "unclear_count": unclear_count,
-                    "speaker_count": speaker_count,
-                    "segment_count": len(self.segments),
+        if notify_client:
+            await self._send_message({
+                "type": "summary",
+                "data": {
+                    "summary": summary_data,
+                    "stats": {
+                        "word_count": word_count,
+                        "unclear_count": unclear_count,
+                        "speaker_count": speaker_count,
+                        "segment_count": len(self.segments),
+                    },
                 },
-            },
-        })
+            })
 
-        await self._send_status("Meeting transcription complete!")
+        if notify_client:
+            await self._send_status("Meeting transcription complete!")
         return result
 
     async def _send_segment(self, segment: dict):
         """Send a transcript segment to the WebSocket client."""
         try:
-            if self.websocket:
+            if self.websocket and self._client_connected:
                 await self.websocket.send_json({
                     "type": "segment",
                     "data": segment,
                 })
         except Exception as e:
+            self.mark_client_disconnected()
             logger.error(f"WebSocket send error: {e}")
 
     async def _send_status(self, message: str):
         """Send a status message to the WebSocket client."""
         try:
-            if self.websocket:
+            if self.websocket and self._client_connected:
                 await self.websocket.send_json({
                     "type": "status",
                     "message": message,
                 })
         except Exception:
-            pass
+            self.mark_client_disconnected()
 
     async def _send_message(self, message: dict):
         """Send a generic message to the WebSocket client."""
         try:
-            if self.websocket:
+            if self.websocket and self._client_connected:
                 await self.websocket.send_json(message)
         except Exception:
-            pass
+            self.mark_client_disconnected()
 
 
 # --- HTTP Endpoints ---
@@ -386,10 +460,8 @@ class StartRequest(BaseModel):
 async def get_audio_devices():
     """List available audio input devices."""
     devices = list_audio_devices()
-    monitor = next((device for device in devices if device.get("is_monitor")), None)
-    mic = next((device for device in devices if device.get("is_default_input")), None)
-    if mic is None:
-        mic = next((device for device in devices if not device.get("is_monitor")), None)
+    monitor = find_monitor_device()
+    mic = find_default_mic()
     snapshot = get_audio_debug_snapshot()
     return {
         "devices": devices,
@@ -627,11 +699,13 @@ async def transcription_websocket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         if _active_session and _active_session.is_running:
-            await _active_session.stop()
+            _active_session.mark_client_disconnected()
+            await _active_session.stop(notify_client=False)
             _active_session = None
         logger.info("WebSocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         if _active_session and _active_session.is_running:
-            await _active_session.stop()
+            _active_session.mark_client_disconnected()
+            await _active_session.stop(notify_client=False)
             _active_session = None

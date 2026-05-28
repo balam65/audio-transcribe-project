@@ -75,12 +75,22 @@ class Config:
     WHISPER_COMPUTE_TYPE: str = ""  # Set in validate()
 
     # --- Audio Settings ---
-    AUDIO_CHUNK_DURATION: int = int(os.getenv("AUDIO_CHUNK_SECONDS", "4"))
+    AUDIO_CHUNK_DURATION: int = int(os.getenv("AUDIO_CHUNK_SECONDS", "6"))
+    AUDIO_CHUNK_STEP_DURATION: float = float(os.getenv("AUDIO_CHUNK_STEP_SECONDS", "3"))
     SAMPLE_RATE: int = 16000  # 16kHz mono — optimal for Whisper
     CHANNELS: int = 1
     AUDIO_FORMAT_WIDTH: int = 2  # 16-bit PCM
     LIVE_MIN_RMS: float = float(os.getenv("LIVE_MIN_RMS", "0.008"))
     LIVE_MIN_PEAK: float = float(os.getenv("LIVE_MIN_PEAK", "0.04"))
+    LIVE_TRANSCRIPTION_TIMEOUT_SECONDS: float = float(
+        os.getenv("LIVE_TRANSCRIPTION_TIMEOUT_SECONDS", "12")
+    )
+    LIVE_TRANSCRIPTION_MAX_RETRIES: int = int(
+        os.getenv("LIVE_TRANSCRIPTION_MAX_RETRIES", "0")
+    )
+    LIVE_NORMALIZE_NON_ENGLISH_ONLY: bool = (
+        os.getenv("LIVE_NORMALIZE_NON_ENGLISH_ONLY", "true").lower() == "true"
+    )
 
     # --- Speaker Diarization ---
     ENABLE_DIARIZATION: bool = os.getenv("ENABLE_DIARIZATION", "false").lower() == "true"
