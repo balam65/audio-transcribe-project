@@ -11,8 +11,11 @@ import os
 import threading
 import queue
 import tempfile
+import wave
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
@@ -472,6 +475,47 @@ def _safe_download_name(file_name: str) -> str:
     return cleaned or "local-recording.wav"
 
 
+def _resolve_local_recording_path(file_name: str) -> Optional[Path]:
+    """Resolve a saved local recording inside the configured recording directory."""
+    safe_name = Path(file_name).name
+    if not safe_name:
+        return None
+
+    base_dir = config.get_local_recording_dir().resolve()
+    path = (base_dir / safe_name).resolve()
+    if path.parent != base_dir:
+        return None
+    if not path.exists() or not path.is_file():
+        return None
+    return path
+
+
+def _get_local_recording_duration_seconds(path: Path) -> float:
+    """Read WAV duration for UI display when possible."""
+    try:
+        with wave.open(str(path), "rb") as wav_file:
+            frame_rate = wav_file.getframerate()
+            if frame_rate <= 0:
+                return 0.0
+            return wav_file.getnframes() / float(frame_rate)
+    except Exception:
+        return 0.0
+
+
+def _serialize_local_recording_file(path: Path) -> dict:
+    """Build a browser-friendly payload for a saved local recording."""
+    stat = path.stat()
+    return {
+        "recording_id": path.name,
+        "file_name": path.name,
+        "file_size_bytes": stat.st_size,
+        "duration_seconds": _get_local_recording_duration_seconds(path),
+        "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        "download_name": _safe_download_name(path.name),
+        "download_url": f"/api/transcription/local-recording/files/{quote(path.name)}",
+    }
+
+
 @router.get("/devices")
 async def get_audio_devices():
     """List available audio input devices."""
@@ -519,6 +563,28 @@ async def get_audio_debug():
     snapshot["meeting_id"] = None
     snapshot["meeting_title"] = None
     return snapshot
+
+
+@router.get("/local-recording/files")
+async def list_local_recording_files():
+    """List completed local recordings saved in the backend directory."""
+    active_file_path = None
+    if _active_local_recording and _active_local_recording.is_running:
+        active_file_path = _active_local_recording.file_path.resolve()
+
+    recording_dir = config.get_local_recording_dir()
+    files = []
+    for path in sorted(
+        recording_dir.glob("*.wav"),
+        key=lambda candidate: candidate.stat().st_mtime,
+        reverse=True,
+    ):
+        resolved = path.resolve()
+        if active_file_path and resolved == active_file_path:
+            continue
+        files.append(_serialize_local_recording_file(resolved))
+
+    return {"recordings": files}
 
 
 @router.post("/local-recording/start")
@@ -587,7 +653,7 @@ async def stop_local_recording():
         "device_name": result["device_name"],
         "duration_seconds": result["duration_seconds"],
         "file_size_bytes": result["file_size_bytes"],
-        "download_url": f"/api/transcription/local-recording/download/{recording_id}",
+        "download_url": f"/api/transcription/local-recording/files/{quote(Path(result['file_path']).name)}",
         "download_name": _safe_download_name(result["file_name"]),
         "message": "Local recording saved and ready to download.",
     }
@@ -597,11 +663,22 @@ async def stop_local_recording():
 async def download_local_recording(recording_id: str):
     """Download a saved local recording."""
     file_path = _local_recording_files.get(recording_id)
-    if not file_path:
-        raise HTTPException(status_code=404, detail="Recording not found.")
+    path = Path(file_path) if file_path else _resolve_local_recording_path(recording_id)
+    if not path or not path.exists():
+        raise HTTPException(status_code=404, detail="Recording file is missing.")
 
-    path = Path(file_path)
-    if not path.exists():
+    return FileResponse(
+        str(path),
+        media_type="audio/wav",
+        filename=_safe_download_name(path.name),
+    )
+
+
+@router.get("/local-recording/files/{file_name}")
+async def download_saved_local_recording(file_name: str):
+    """Download a saved local recording directly from disk."""
+    path = _resolve_local_recording_path(file_name)
+    if not path:
         raise HTTPException(status_code=404, detail="Recording file is missing.")
 
     return FileResponse(

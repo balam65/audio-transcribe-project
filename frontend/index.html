@@ -161,7 +161,7 @@
             </div>
           </section>
 
-          <section class="studio-card">
+          <section class="studio-card local-recording-card">
             <div class="card-header"><h2>Local Recording</h2></div>
             <div class="card-body card-stack">
               <div class="service-pill" id="local-recording-status">Records system audio locally in the backend. No model is needed to save the WAV file.</div>
@@ -183,7 +183,18 @@
                 <strong class="file-name" id="local-recording-file-name">No local file yet</strong>
                 <p class="file-meta-copy" id="local-recording-file-meta">Start and stop to save a backend WAV file that is ready to download.</p>
               </div>
-              <a class="btn btn-secondary btn-upload hidden" id="btn-download-local-recording" href="#" download>Download last recording</a>
+              <section class="local-recording-library" aria-labelledby="local-recording-library-title">
+                <div class="local-recording-library-head">
+                  <div>
+                    <strong id="local-recording-library-title">Saved recordings</strong>
+                    <p>Every finished local recording appears here.</p>
+                  </div>
+                  <span class="soft-pill" id="local-recording-count">0 files</span>
+                </div>
+                <div class="local-recording-list" id="local-recording-list">
+                  <div class="local-recording-list-empty">No saved recordings yet.</div>
+                </div>
+              </section>
             </div>
           </section>
 
@@ -310,14 +321,14 @@
         <aside class="right-rail">
           <section class="studio-card">
             <div class="card-header">
-              <h2>Past Meetings</h2>
+              <h2>History</h2>
               <button class="btn btn-ghost btn-icon" id="btn-refresh-history" type="button">Refresh</button>
             </div>
             <div class="meeting-list" id="meeting-list">
               <div class="transcript-empty compact-empty">
                 <div class="transcript-empty-icon">◌</div>
-                <h3>No meetings yet</h3>
-                <p>Completed sessions appear here.</p>
+                <h3>No history yet</h3>
+                <p>Completed meetings and saved local recordings appear here.</p>
               </div>
             </div>
           </section>

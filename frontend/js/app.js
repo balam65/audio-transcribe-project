@@ -22,6 +22,7 @@ const App = {
   transcriptionDetail: '',
   isLocalRecording: false,
   localRecordingId: null,
+  localRecordingFiles: [],
   localRecordingStartTime: null,
   localRecordingTimerInterval: null,
   localRecordingDownloadUrl: '',
@@ -104,6 +105,7 @@ const App = {
     this.setUploadHelperText('Full-file transcription often gives cleaner results than live capture for prerecorded audio.');
     this.setActivity('idle', 'Ready', 'The configured providers are idle and waiting for the next session.');
     this.updateLocalRecordingCard();
+    this.renderLocalRecordingLibrary();
     this.updateStats();
     this.updateSearchMetrics();
     this.updateHeroSignals();
@@ -664,44 +666,72 @@ const App = {
 
   async loadHistory() {
     try {
-      const response = await fetch('/api/meetings/');
-      const data = await response.json();
-      this.renderHistory(data.meetings || []);
+      const [meetingsData, recordingsData] = await Promise.all([
+        fetch('/api/meetings/')
+          .then(async (response) => {
+            if (!response.ok) throw new Error('Could not load meetings');
+            return response.json();
+          })
+          .catch((error) => {
+            console.warn('Could not load meetings:', error);
+            return { meetings: [] };
+          }),
+        fetch('/api/transcription/local-recording/files')
+          .then(async (response) => {
+            if (!response.ok) throw new Error('Could not load local recordings');
+            return response.json();
+          })
+          .catch((error) => {
+            console.warn('Could not load local recordings:', error);
+            return { recordings: [] };
+          }),
+      ]);
+
+      this.localRecordingFiles = Array.isArray(recordingsData.recordings) ? recordingsData.recordings : [];
+      this.renderLocalRecordingLibrary(this.localRecordingFiles);
+      this.renderHistory({
+        meetings: meetingsData.meetings || [],
+        recordings: this.localRecordingFiles,
+      });
     } catch (error) {
       console.warn('Could not load history:', error);
     }
   },
 
-  renderHistory(meetings) {
+  renderHistory({ meetings = [], recordings = [] } = {}) {
     const list = document.getElementById('meeting-list');
     if (!list) return;
 
-    if (!meetings.length) {
+    if (!meetings.length && !recordings.length) {
       list.innerHTML = `
         <div class="transcript-empty compact-empty">
           <div class="transcript-empty-icon">◌</div>
-          <h3>No meetings yet</h3>
-          <p>Completed live sessions and uploaded files will appear here.</p>
+          <h3>No history yet</h3>
+          <p>Completed live sessions, uploaded files, and local recordings will appear here.</p>
         </div>
       `;
       return;
     }
 
-    list.innerHTML = meetings.slice(0, 12).map((meeting) => {
-      const isActive = this.meetingId === meeting.id ? 'active' : '';
-      return `
-        <div class="meeting-item ${isActive}" data-id="${meeting.id}">
-          <div class="meeting-item-info">
-            <h4>${this.escapeHtml(meeting.title || 'Untitled Meeting')}</h4>
-            <p>${this.escapeHtml(this.formatDateTime(meeting.created_at))} · ${meeting.word_count || 0} words</p>
-          </div>
-          <div class="meeting-item-actions">
-            <button class="btn btn-ghost btn-inline" data-history-view="${meeting.id}" type="button">View</button>
-            <button class="btn btn-ghost btn-inline" data-history-delete="${meeting.id}" type="button">Delete</button>
-          </div>
-        </div>
-      `;
-    }).join('');
+    const sections = [];
+
+    if (recordings.length) {
+      sections.push(this.renderHistorySection(
+        'Local Recordings',
+        'Saved WAV files from the backend recorder.',
+        recordings.slice(0, 12).map((recording) => this.renderLocalRecordingHistoryItem(recording)).join('')
+      ));
+    }
+
+    if (meetings.length) {
+      sections.push(this.renderHistorySection(
+        'Meetings',
+        'Completed live sessions and uploaded transcripts.',
+        meetings.slice(0, 12).map((meeting) => this.renderMeetingHistoryItem(meeting)).join('')
+      ));
+    }
+
+    list.innerHTML = sections.join('');
 
     list.querySelectorAll('[data-history-view]').forEach((button) => {
       button.addEventListener('click', () => this.viewMeeting(button.dataset.historyView));
@@ -710,6 +740,103 @@ const App = {
     list.querySelectorAll('[data-history-delete]').forEach((button) => {
       button.addEventListener('click', () => this.deleteMeeting(button.dataset.historyDelete));
     });
+  },
+
+  renderHistorySection(title, description, itemsMarkup) {
+    return `
+      <section class="history-section">
+        <div class="history-section-header">
+          <h3>${this.escapeHtml(title)}</h3>
+          <p>${this.escapeHtml(description)}</p>
+        </div>
+        ${itemsMarkup}
+      </section>
+    `;
+  },
+
+  renderMeetingHistoryItem(meeting) {
+    const isActive = this.meetingId === meeting.id ? 'active' : '';
+    return `
+      <div class="meeting-item ${isActive}" data-id="${meeting.id}">
+        <div class="meeting-item-info">
+          <h4>${this.escapeHtml(meeting.title || 'Untitled Meeting')}</h4>
+          <p>${this.escapeHtml(this.formatDateTime(meeting.created_at))} · ${meeting.word_count || 0} words</p>
+        </div>
+        <div class="meeting-item-actions">
+          <button class="btn btn-ghost btn-inline" data-history-view="${meeting.id}" type="button">View</button>
+          <button class="btn btn-ghost btn-inline" data-history-delete="${meeting.id}" type="button">Delete</button>
+        </div>
+      </div>
+    `;
+  },
+
+  renderLocalRecordingHistoryItem(recording) {
+    const duration = Number(recording.duration_seconds) > 0
+      ? this.formatTime(recording.duration_seconds)
+      : '00:00';
+    const meta = [
+      this.formatDateTime(recording.created_at),
+      this.formatBytes(recording.file_size_bytes || 0),
+      duration,
+    ];
+
+    return `
+      <div class="meeting-item">
+        <div class="meeting-item-info">
+          <h4>${this.escapeHtml(recording.file_name || 'Local recording.wav')}</h4>
+          <p>${this.escapeHtml(meta.join(' · '))}</p>
+        </div>
+        <div class="meeting-item-actions">
+          <a
+            class="btn btn-ghost btn-inline"
+            href="${this.escapeHtml(recording.download_url || '#')}"
+            download="${this.escapeHtml(recording.download_name || recording.file_name || 'local-recording.wav')}"
+          >Download</a>
+        </div>
+      </div>
+    `;
+  },
+
+  renderLocalRecordingLibrary(recordings = this.localRecordingFiles) {
+    const list = document.getElementById('local-recording-list');
+    const count = document.getElementById('local-recording-count');
+    if (!list || !count) return;
+
+    const safeRecordings = Array.isArray(recordings) ? recordings : [];
+    count.textContent = `${safeRecordings.length} ${safeRecordings.length === 1 ? 'file' : 'files'}`;
+
+    if (!safeRecordings.length) {
+      list.innerHTML = '<div class="local-recording-list-empty">No saved recordings yet.</div>';
+      return;
+    }
+
+    list.innerHTML = safeRecordings.map((recording) => this.renderLocalRecordingLibraryItem(recording)).join('');
+  },
+
+  renderLocalRecordingLibraryItem(recording) {
+    const duration = Number(recording.duration_seconds) > 0
+      ? this.formatTime(recording.duration_seconds)
+      : '00:00';
+
+    return `
+      <article class="local-recording-item">
+        <div class="local-recording-item-main">
+          <div class="local-recording-item-top">
+            <span class="soft-pill">${duration}</span>
+            <span class="file-size">${this.formatBytes(recording.file_size_bytes || 0)}</span>
+          </div>
+          <strong class="local-recording-item-title">${this.escapeHtml(recording.file_name || 'Local recording.wav')}</strong>
+          <p class="local-recording-item-meta">${this.escapeHtml(this.formatDateTime(recording.created_at))}</p>
+        </div>
+        <div class="local-recording-item-actions">
+          <a
+            class="btn btn-ghost btn-inline"
+            href="${this.escapeHtml(recording.download_url || '#')}"
+            download="${this.escapeHtml(recording.download_name || recording.file_name || 'local-recording.wav')}"
+          >Download</a>
+        </div>
+      </article>
+    `;
   },
 
   startRecording() {
@@ -847,12 +974,6 @@ const App = {
       this.localRecordingStartTime = null;
       this.stopLocalRecordingTimer();
 
-      const downloadButton = document.getElementById('btn-download-local-recording');
-      if (downloadButton && this.localRecordingDownloadUrl) {
-        downloadButton.href = this.localRecordingDownloadUrl;
-        downloadButton.download = data.download_name || data.file_name || 'local-recording.wav';
-      }
-
       this.setText('local-recording-status', data.message || 'Local recording saved.');
       this.setText('local-recording-file-pill', 'Ready to download');
       this.setText('local-recording-file-name', data.file_name || 'Local recording saved');
@@ -865,6 +986,7 @@ const App = {
         durationSeconds: data.duration_seconds || 0,
         downloadUrl: data.download_url || '',
       });
+      await this.loadHistory();
       this.updateUI();
       this.updateHeroSignals();
       this.showToast('Local recording saved', 'success');
@@ -1423,7 +1545,6 @@ const App = {
     const localStartButton = document.getElementById('btn-start-local-recording');
     const localStopButton = document.getElementById('btn-stop-local-recording');
     const localIndicator = document.getElementById('local-recording-indicator');
-    const localDownloadButton = document.getElementById('btn-download-local-recording');
     const isBusy = this.isRecording || this.isUploading || this.isLocalRecording;
 
     if (recordingIndicator) {
@@ -1471,11 +1592,6 @@ const App = {
       localStopButton.classList.toggle('hidden', !this.isLocalRecording);
       localStopButton.disabled = this.isRecording || this.isUploading;
     }
-    if (localDownloadButton) {
-      localDownloadButton.classList.toggle('hidden', !this.localRecordingDownloadUrl || this.isLocalRecording);
-      localDownloadButton.setAttribute('aria-disabled', this.isLocalRecording ? 'true' : 'false');
-    }
-
     if (copyButton) copyButton.disabled = !this.segments.length;
     if (clearButton) clearButton.disabled = !this.segments.length || this.isRecording || this.isUploading || this.isLocalRecording;
     if (clearSearchButton) clearSearchButton.disabled = !this.searchQuery;
