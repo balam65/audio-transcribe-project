@@ -8,10 +8,13 @@ import asyncio
 import contextlib
 import logging
 import os
+import re
 import struct
 import subprocess
 import threading
 import time
+import uuid
+import wave
 from typing import Callable, Optional
 
 import numpy as np
@@ -969,3 +972,233 @@ class CombinedAudioCapture:
             selected_mic_device_index=self.mic_device_index,
             active_capture=[stream.debug_info for stream in self._streams],
         )
+
+
+class LocalAudioRecorder:
+    """Record system audio to a local WAV file without running transcription."""
+
+    def __init__(self, device_index: int, title: str = "local-recording"):
+        self.device_index = device_index
+        self.title = title or "local-recording"
+        self.sample_rate = config.SAMPLE_RATE
+        self.channels = config.CHANNELS
+        self._pa: Optional[pyaudio.PyAudio] = None
+        self._stream = None
+        self._thread: Optional[threading.Thread] = None
+        self._wave_file: Optional[wave.Wave_write] = None
+        self._running = False
+        self._input_rate = self.sample_rate
+        self._input_channels = 1
+        self._device_name = f"device-{device_index}"
+        self._frames_written = 0
+        self._start_time = 0.0
+        self.recording_id = str(uuid.uuid4())
+        self.file_path = config.get_local_recording_dir() / self._build_file_name()
+
+    def _build_file_name(self) -> str:
+        """Create a readable file name for the saved WAV."""
+        slug = re.sub(r"[^a-z0-9]+", "-", self.title.lower()).strip("-")
+        slug = slug or "local-recording"
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        return f"{timestamp}-{slug}.wav"
+
+    def start(self) -> dict:
+        """Start recording the selected device into a WAV file."""
+        if not PYAUDIO_AVAILABLE:
+            raise RuntimeError(
+                "PyAudio is not installed. Run: sudo apt-get install portaudio19-dev && pip install PyAudio"
+            )
+
+        self._running = True
+        self._start_time = time.time()
+        self._frames_written = 0
+
+        with _suppress_audio_backend_stderr():
+            self._pa = pyaudio.PyAudio()
+            device_info = _get_device_info(self._pa, self.device_index)
+
+        self._input_rate = device_info["sample_rate"]
+        self._input_channels = min(device_info["input_channels"], 2)
+        self._device_name = device_info["name"]
+
+        with _suppress_audio_backend_stderr():
+            self._stream = self._pa.open(
+                format=pyaudio.paInt16,
+                channels=self._input_channels,
+                rate=self._input_rate,
+                input=True,
+                input_device_index=self.device_index,
+                frames_per_buffer=max(1024, int(self._input_rate * 0.064)),
+            )
+
+        self._wave_file = wave.open(str(self.file_path), "wb")
+        self._wave_file.setnchannels(self.channels)
+        self._wave_file.setsampwidth(config.AUDIO_FORMAT_WIDTH)
+        self._wave_file.setframerate(self.sample_rate)
+
+        self._thread = threading.Thread(
+            target=self._record_loop,
+            name="LocalAudioRecorder",
+            daemon=True,
+        )
+        self._thread.start()
+
+        threading.Thread(
+            target=self._link_pipewire_ports,
+            name="LocalRecorder-PipeWire-AutoLinker",
+            daemon=True,
+        ).start()
+
+        logger.info(
+            "Local audio recording started: %s (%s, %sHz/%sch) -> %s",
+            self.device_index,
+            self._device_name,
+            self._input_rate,
+            self._input_channels,
+            self.file_path,
+        )
+
+        snapshot = get_audio_debug_snapshot(
+            selected_system_device_index=self.device_index,
+            active_capture=[self.debug_info],
+        )
+        return {
+            "recording_id": self.recording_id,
+            "file_name": self.file_path.name,
+            "device_name": self._device_name,
+            "capture_target": snapshot.get("capture_target"),
+            "quality_warning": snapshot.get("quality_warning"),
+        }
+
+    def _record_loop(self):
+        """Continuously read audio and append it to the WAV file."""
+        while self._running:
+            try:
+                chunk = self._stream.read(
+                    max(1024, int(self._input_rate * 0.064)),
+                    exception_on_overflow=False,
+                )
+                audio_np = self._prepare_audio(chunk)
+                if audio_np.size == 0 or not self._wave_file:
+                    continue
+
+                audio_int16 = np.clip(audio_np, -1.0, 1.0)
+                audio_int16 = (audio_int16 * 32767.0).astype(np.int16)
+                self._wave_file.writeframes(audio_int16.tobytes())
+                self._frames_written += len(audio_int16)
+            except Exception as exc:
+                if self._running:
+                    logger.error("Local audio recording error: %s", exc)
+                    time.sleep(0.1)
+
+    def _prepare_audio(self, chunk_bytes: bytes) -> np.ndarray:
+        """Convert native device PCM into 16kHz mono float32 audio."""
+        frame_width = 2 * self._input_channels
+        if len(chunk_bytes) < frame_width:
+            return np.zeros(0, dtype=np.float32)
+
+        usable_bytes = len(chunk_bytes) - (len(chunk_bytes) % frame_width)
+        if usable_bytes != len(chunk_bytes):
+            chunk_bytes = chunk_bytes[:usable_bytes]
+
+        audio_np = np.frombuffer(chunk_bytes, dtype=np.int16).astype(np.float32)
+
+        if self._input_channels > 1:
+            audio_np = audio_np.reshape(-1, self._input_channels).mean(axis=1)
+
+        audio_np /= 32768.0
+
+        if self._input_rate != self.sample_rate and len(audio_np) > 1:
+            target_len = int(len(audio_np) * self.sample_rate / self._input_rate)
+            source_positions = np.linspace(0, len(audio_np) - 1, num=len(audio_np), dtype=np.float32)
+            target_positions = np.linspace(0, len(audio_np) - 1, num=target_len, dtype=np.float32)
+            audio_np = np.interp(target_positions, source_positions, audio_np).astype(np.float32)
+
+        return audio_np
+
+    def _link_pipewire_ports(self):
+        """Link the active meeting/sink output into the recorder stream when using PipeWire."""
+        time.sleep(1.5)
+        try:
+            output_ports = _run_command(["pw-link", "-o"]).splitlines()
+            input_ports = _run_command(["pw-link", "-i"]).splitlines()
+
+            app_fl = next((p for p in input_ports if "input_FL" in p and "python" in p.lower()), None)
+            app_fr = next((p for p in input_ports if "input_FR" in p and "python" in p.lower()), None)
+            app_mono = next((p for p in input_ports if "input_MONO" in p and "python" in p.lower()), None)
+            app_fl = app_fl or next((p for p in input_ports if "input_FL" in p), None)
+            app_fr = app_fr or next((p for p in input_ports if "input_FR" in p), None)
+            app_mono = app_mono or next((p for p in input_ports if "input_MONO" in p), None)
+
+            capture_target, target_fl, target_fr = _choose_capture_target_ports(output_ports)
+            if capture_target == "meeting_stream":
+                logger.info("Local recorder auto-link: capturing direct meeting app stream")
+            elif capture_target == "sink_monitor":
+                logger.info("Local recorder auto-link: falling back to active sink monitor")
+
+            if target_fl and app_fl:
+                subprocess.run(["pw-link", target_fl, app_fl], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif target_fl and app_mono:
+                subprocess.run(["pw-link", target_fl, app_mono], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            if target_fr and app_fr:
+                subprocess.run(["pw-link", target_fr, app_fr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif target_fl and not target_fr and app_fr:
+                subprocess.run(["pw-link", target_fl, app_fr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as exc:
+            logger.warning("Could not auto-link PipeWire ports for local recorder (non-fatal): %s", exc)
+
+    def stop(self) -> dict:
+        """Stop recording and finalize the WAV file."""
+        self._running = False
+
+        if self._thread:
+            self._thread.join(timeout=2.0)
+
+        if self._stream:
+            try:
+                self._stream.stop_stream()
+                self._stream.close()
+            except Exception:
+                pass
+
+        if self._pa:
+            try:
+                self._pa.terminate()
+            except Exception:
+                pass
+
+        if self._wave_file:
+            try:
+                self._wave_file.close()
+            except Exception:
+                pass
+
+        duration_seconds = self._frames_written / float(self.sample_rate) if self.sample_rate else 0.0
+        logger.info("Local audio recording stopped: %s (%ss)", self.file_path, round(duration_seconds, 2))
+
+        return {
+            "recording_id": self.recording_id,
+            "file_name": self.file_path.name,
+            "file_path": str(self.file_path),
+            "device_name": self._device_name,
+            "duration_seconds": duration_seconds,
+            "file_size_bytes": self.file_path.stat().st_size if self.file_path.exists() else 0,
+        }
+
+    @property
+    def is_running(self) -> bool:
+        return self._running
+
+    @property
+    def debug_info(self) -> dict:
+        """Return capture details for diagnostics."""
+        return {
+            "source_type": "system",
+            "device_index": self.device_index,
+            "device_name": self._device_name,
+            "input_rate": self._input_rate,
+            "input_channels": self._input_channels,
+            "chunk_duration": 0.064,
+            "step_duration": 0.064,
+        }

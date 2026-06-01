@@ -18,6 +18,13 @@ const App = {
   searchQuery: '',
   transcriptionHealthLabel: 'Checking transcription',
   summaryHealthLabel: 'Checking summary',
+  transcriptionReady: false,
+  transcriptionDetail: '',
+  isLocalRecording: false,
+  localRecordingId: null,
+  localRecordingStartTime: null,
+  localRecordingTimerInterval: null,
+  localRecordingDownloadUrl: '',
   audioDebugData: null,
   connectedBluetoothDevices: [],
   bluetoothDevices: [],
@@ -54,6 +61,9 @@ const App = {
 
     document.getElementById('btn-upload-audio')?.addEventListener('click', () => this.transcribeUploadedFile());
     document.getElementById('input-audio-file')?.addEventListener('change', (event) => this.onAudioFileSelected(event));
+    document.getElementById('btn-start-local-recording')?.addEventListener('click', () => this.startLocalRecording());
+    document.getElementById('btn-stop-local-recording')?.addEventListener('click', () => this.stopLocalRecording());
+    document.getElementById('btn-download-local-recording')?.addEventListener('click', () => this.showToast('Downloading local recording', 'info'));
 
     document.getElementById('btn-refresh-audio')?.addEventListener('click', () => {
       this.loadDevices();
@@ -93,6 +103,7 @@ const App = {
     this.setUploadState('empty');
     this.setUploadHelperText('Full-file transcription often gives cleaner results than live capture for prerecorded audio.');
     this.setActivity('idle', 'Ready', 'The configured providers are idle and waiting for the next session.');
+    this.updateLocalRecordingCard();
     this.updateStats();
     this.updateSearchMetrics();
     this.updateHeroSignals();
@@ -218,8 +229,8 @@ const App = {
   },
 
   lockStudio() {
-    if (this.isRecording || this.isUploading) {
-      this.showToast('Stop the active transcription before locking the studio', 'error');
+    if (this.isRecording || this.isUploading || this.isLocalRecording) {
+      this.showToast('Stop the active recording before locking the studio', 'error');
       return;
     }
 
@@ -296,6 +307,8 @@ const App = {
     }
 
     this.transcriptionHealthLabel = label;
+    this.transcriptionReady = ready && modelAvailable;
+    this.transcriptionDetail = data.transcription_detail || '';
 
     if (badge) {
       badge.textContent = label;
@@ -700,7 +713,7 @@ const App = {
   },
 
   startRecording() {
-    if (this.isRecording || this.isUploading) return;
+    if (this.isRecording || this.isUploading || this.isLocalRecording) return;
 
     const title = this.ensureMeetingTitle('Meeting');
     const micToggle = document.getElementById('toggle-mic');
@@ -769,6 +782,95 @@ const App = {
     this.stopAudioDebugPolling();
     this.loadAudioDebug();
     this.updateHeroSignals();
+  },
+
+  async startLocalRecording() {
+    if (this.isRecording || this.isUploading || this.isLocalRecording) return;
+
+    const title = this.ensureMeetingTitle('Local Recording');
+    const systemDeviceIndex = document.getElementById('select-system-device')?.value || null;
+
+    try {
+      const response = await fetch('/api/transcription/local-recording/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          system_device_index: systemDeviceIndex ? parseInt(systemDeviceIndex, 10) : null,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Could not start local recording');
+      }
+
+      this.isLocalRecording = true;
+      this.localRecordingId = data.recording_id || null;
+      this.localRecordingStartTime = Date.now();
+      this.localRecordingDownloadUrl = '';
+      this.setText('local-recording-status', data.message || 'Local recording started.');
+      this.setText('local-recording-file-pill', 'Recording...');
+      this.setText('local-recording-file-name', data.file_name || 'Recording in progress');
+      this.setText(
+        'local-recording-file-meta',
+        data.quality_warning
+          || `${data.device_name || 'System audio'} is being saved locally in the backend.`
+      );
+      this.setText('local-recording-file-size', 'REC');
+      this.updateLocalRecordingCard();
+      this.startLocalRecordingTimer();
+      this.updateUI();
+      this.updateHeroSignals();
+      this.showToast('Local recording started', 'success');
+    } catch (error) {
+      this.showToast(error.message || 'Could not start local recording', 'error');
+    }
+  },
+
+  async stopLocalRecording() {
+    if (!this.isLocalRecording) return;
+
+    try {
+      const response = await fetch('/api/transcription/local-recording/stop', {
+        method: 'POST',
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Could not stop local recording');
+      }
+
+      this.isLocalRecording = false;
+      this.localRecordingDownloadUrl = data.download_url || '';
+      this.localRecordingId = data.recording_id || null;
+      this.localRecordingStartTime = null;
+      this.stopLocalRecordingTimer();
+
+      const downloadButton = document.getElementById('btn-download-local-recording');
+      if (downloadButton && this.localRecordingDownloadUrl) {
+        downloadButton.href = this.localRecordingDownloadUrl;
+        downloadButton.download = data.download_name || data.file_name || 'local-recording.wav';
+      }
+
+      this.setText('local-recording-status', data.message || 'Local recording saved.');
+      this.setText('local-recording-file-pill', 'Ready to download');
+      this.setText('local-recording-file-name', data.file_name || 'Local recording saved');
+      this.setText(
+        'local-recording-file-meta',
+        `${data.device_name || 'System audio'} recorded locally. Duration ${this.formatTime(data.duration_seconds || 0)}.`
+      );
+      this.setText('local-recording-file-size', this.formatBytes(data.file_size_bytes || 0));
+      this.updateLocalRecordingCard({
+        durationSeconds: data.duration_seconds || 0,
+        downloadUrl: data.download_url || '',
+      });
+      this.updateUI();
+      this.updateHeroSignals();
+      this.showToast('Local recording saved', 'success');
+    } catch (error) {
+      this.showToast(error.message || 'Could not stop local recording', 'error');
+    }
   },
 
   onSessionStarted(data) {
@@ -1270,6 +1372,8 @@ const App = {
   updateHeroSignals() {
     const recordingStatus = this.isRecording
       ? 'Recording live'
+      : this.isLocalRecording
+        ? 'Recording locally'
       : this.isUploading
         ? 'Processing file'
         : this.meetingId && this.segments.length
@@ -1278,6 +1382,8 @@ const App = {
 
     const mode = this.isRecording
       ? 'Live capture'
+      : this.isLocalRecording
+        ? 'Local recording'
       : this.isUploading
         ? 'Uploaded file'
         : this.activeMode === 'review'
@@ -1314,14 +1420,23 @@ const App = {
     const clearButton = document.getElementById('btn-clear-transcript');
     const clearSearchButton = document.getElementById('btn-clear-search');
     const exportButtons = document.querySelectorAll('[data-export]');
+    const localStartButton = document.getElementById('btn-start-local-recording');
+    const localStopButton = document.getElementById('btn-stop-local-recording');
+    const localIndicator = document.getElementById('local-recording-indicator');
+    const localDownloadButton = document.getElementById('btn-download-local-recording');
+    const isBusy = this.isRecording || this.isUploading || this.isLocalRecording;
 
     if (recordingIndicator) {
       recordingIndicator.classList.toggle('active', this.isRecording);
     }
+    if (localIndicator) {
+      localIndicator.classList.toggle('active', this.isLocalRecording);
+    }
 
     if (startButton) {
       startButton.classList.toggle('hidden', this.isRecording);
-      startButton.disabled = this.isUploading;
+      startButton.disabled = this.isUploading || this.isLocalRecording;
+      startButton.textContent = 'Start transcription';
     }
 
     if (stopButton) {
@@ -1329,27 +1444,43 @@ const App = {
       stopButton.disabled = this.isUploading;
     }
 
-    if (inlineStart) inlineStart.disabled = this.isRecording || this.isUploading;
+    if (inlineStart) {
+      inlineStart.disabled = this.isRecording || this.isUploading || this.isLocalRecording;
+      inlineStart.textContent = 'Start';
+    }
     if (inlineStop) inlineStop.disabled = !this.isRecording || this.isUploading;
     if (pauseButton) pauseButton.disabled = true;
 
     if (uploadButton) {
-      uploadButton.disabled = this.isRecording || this.isUploading;
+      uploadButton.disabled = this.isRecording || this.isUploading || this.isLocalRecording;
       uploadButton.textContent = this.isUploading ? 'Processing audio file...' : 'Transcribe audio file';
     }
 
-    if (fileInput) fileInput.disabled = this.isRecording || this.isUploading;
-    if (uploadTitle) uploadTitle.disabled = this.isRecording || this.isUploading;
-    if (titleInput) titleInput.disabled = this.isRecording || this.isUploading;
-    if (systemSelect) systemSelect.disabled = this.isRecording || this.isUploading;
-    if (micSelect) micSelect.disabled = this.isRecording || this.isUploading;
-    if (micToggle) micToggle.disabled = this.isRecording || this.isUploading;
+    if (fileInput) fileInput.disabled = isBusy;
+    if (uploadTitle) uploadTitle.disabled = isBusy;
+    if (titleInput) titleInput.disabled = isBusy;
+    if (systemSelect) systemSelect.disabled = isBusy;
+    if (micSelect) micSelect.disabled = isBusy;
+    if (micToggle) micToggle.disabled = isBusy;
+
+    if (localStartButton) {
+      localStartButton.classList.toggle('hidden', this.isLocalRecording);
+      localStartButton.disabled = this.isRecording || this.isUploading;
+    }
+    if (localStopButton) {
+      localStopButton.classList.toggle('hidden', !this.isLocalRecording);
+      localStopButton.disabled = this.isRecording || this.isUploading;
+    }
+    if (localDownloadButton) {
+      localDownloadButton.classList.toggle('hidden', !this.localRecordingDownloadUrl || this.isLocalRecording);
+      localDownloadButton.setAttribute('aria-disabled', this.isLocalRecording ? 'true' : 'false');
+    }
 
     if (copyButton) copyButton.disabled = !this.segments.length;
-    if (clearButton) clearButton.disabled = !this.segments.length || this.isRecording || this.isUploading;
+    if (clearButton) clearButton.disabled = !this.segments.length || this.isRecording || this.isUploading || this.isLocalRecording;
     if (clearSearchButton) clearSearchButton.disabled = !this.searchQuery;
 
-    const canExport = Boolean(this.meetingId) && !this.isRecording && !this.isUploading;
+    const canExport = Boolean(this.meetingId) && !this.isRecording && !this.isUploading && !this.isLocalRecording;
     exportButtons.forEach((button) => {
       button.disabled = !canExport;
     });
@@ -1362,6 +1493,42 @@ const App = {
     const micDeviceGroup = document.getElementById('mic-device-group');
     if (!micToggle || !micDeviceGroup) return;
     micDeviceGroup.style.display = micToggle.checked ? 'grid' : 'none';
+  },
+
+  startLocalRecordingTimer() {
+    this.stopLocalRecordingTimer();
+    this.setText('local-rec-timer', '00:00');
+    this.localRecordingTimerInterval = window.setInterval(() => {
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - (this.localRecordingStartTime || Date.now())) / 1000));
+      this.setText('local-rec-timer', this.formatTime(elapsedSeconds));
+      this.setText('local-recording-file-size', this.formatTime(elapsedSeconds));
+    }, 1000);
+  },
+
+  stopLocalRecordingTimer() {
+    if (this.localRecordingTimerInterval) {
+      window.clearInterval(this.localRecordingTimerInterval);
+      this.localRecordingTimerInterval = null;
+    }
+  },
+
+  updateLocalRecordingCard(details = {}) {
+    if (this.isLocalRecording) {
+      this.setText('local-recording-status', 'Recording system audio locally in the backend. No model is needed to save the WAV file.');
+      return;
+    }
+
+    if (details.downloadUrl) {
+      this.setText('local-rec-timer', this.formatTime(details.durationSeconds || 0));
+      return;
+    }
+
+    this.setText('local-recording-status', 'Records system audio locally in the backend. No model is needed to save the WAV file.');
+    this.setText('local-rec-timer', '00:00');
+    this.setText('local-recording-file-pill', 'No recording yet');
+    this.setText('local-recording-file-name', 'No local file yet');
+    this.setText('local-recording-file-meta', 'Start and stop to save a backend WAV file that is ready to download.');
+    this.setText('local-recording-file-size', '0 B');
   },
 
   startTimer() {

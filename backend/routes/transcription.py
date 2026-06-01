@@ -11,10 +11,12 @@ import os
 import threading
 import queue
 import tempfile
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from config import config
@@ -23,6 +25,7 @@ from services.audio_capture import (
     find_monitor_device,
     find_default_mic,
     CombinedAudioCapture,
+    LocalAudioRecorder,
     get_audio_debug_snapshot,
 )
 from services.transcription import TranscriptionService, TranscriptSegment
@@ -41,6 +44,8 @@ router = APIRouter(prefix="/api/transcription", tags=["transcription"])
 
 # Global state for the active transcription session
 _active_session = None
+_active_local_recording: Optional[LocalAudioRecorder] = None
+_local_recording_files: dict[str, str] = {}
 
 
 class TranscriptionSession:
@@ -456,6 +461,17 @@ class StartRequest(BaseModel):
     mic_device_index: Optional[int] = None
 
 
+class LocalRecordingStartRequest(BaseModel):
+    title: Optional[str] = None
+    system_device_index: Optional[int] = None
+
+
+def _safe_download_name(file_name: str) -> str:
+    """Keep download names filesystem-safe and browser-friendly."""
+    cleaned = "".join(char if char.isalnum() or char in {".", "-", "_"} else "-" for char in file_name)
+    return cleaned or "local-recording.wav"
+
+
 @router.get("/devices")
 async def get_audio_devices():
     """List available audio input devices."""
@@ -503,6 +519,96 @@ async def get_audio_debug():
     snapshot["meeting_id"] = None
     snapshot["meeting_title"] = None
     return snapshot
+
+
+@router.post("/local-recording/start")
+async def start_local_recording(request: LocalRecordingStartRequest):
+    """Start recording system audio locally in the backend."""
+    global _active_local_recording
+
+    if _active_session and _active_session.is_running:
+        raise HTTPException(status_code=409, detail="Stop live transcription before starting local recording.")
+    if _active_local_recording and _active_local_recording.is_running:
+        raise HTTPException(status_code=409, detail="A local recording is already in progress.")
+
+    system_device = request.system_device_index
+    if system_device is None:
+        monitor = find_monitor_device()
+        if monitor:
+            system_device = monitor["index"]
+
+    if system_device is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No system audio monitor device found. Install PulseAudio/PipeWire.",
+        )
+
+    title = (request.title or "Local Recording").strip() or "Local Recording"
+    recorder = LocalAudioRecorder(device_index=system_device, title=title)
+
+    try:
+        result = recorder.start()
+        _active_local_recording = recorder
+    except Exception as exc:
+        logger.error("Could not start local recording: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {
+        "status": "recording",
+        "recording_id": result["recording_id"],
+        "file_name": result["file_name"],
+        "device_name": result["device_name"],
+        "capture_target": result.get("capture_target"),
+        "quality_warning": result.get("quality_warning"),
+        "message": "Local recording started. Audio is being saved in the backend.",
+    }
+
+
+@router.post("/local-recording/stop")
+async def stop_local_recording():
+    """Stop the active local recording and return its download metadata."""
+    global _active_local_recording, _local_recording_files
+
+    if not _active_local_recording or not _active_local_recording.is_running:
+        raise HTTPException(status_code=400, detail="No local recording is currently active.")
+
+    try:
+        result = _active_local_recording.stop()
+    finally:
+        _active_local_recording = None
+
+    recording_id = result["recording_id"]
+    _local_recording_files[recording_id] = result["file_path"]
+
+    return {
+        "status": "completed",
+        "recording_id": recording_id,
+        "file_name": result["file_name"],
+        "device_name": result["device_name"],
+        "duration_seconds": result["duration_seconds"],
+        "file_size_bytes": result["file_size_bytes"],
+        "download_url": f"/api/transcription/local-recording/download/{recording_id}",
+        "download_name": _safe_download_name(result["file_name"]),
+        "message": "Local recording saved and ready to download.",
+    }
+
+
+@router.get("/local-recording/download/{recording_id}")
+async def download_local_recording(recording_id: str):
+    """Download a saved local recording."""
+    file_path = _local_recording_files.get(recording_id)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Recording not found.")
+
+    path = Path(file_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Recording file is missing.")
+
+    return FileResponse(
+        str(path),
+        media_type="audio/wav",
+        filename=_safe_download_name(path.name),
+    )
 
 
 @router.post("/file")
@@ -623,6 +729,12 @@ async def transcription_websocket(websocket: WebSocket):
                     await websocket.send_json({
                         "type": "error",
                         "message": "A session is already active. Stop it first.",
+                    })
+                    continue
+                if _active_local_recording and _active_local_recording.is_running:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Stop the local recording before starting live transcription.",
                     })
                     continue
 

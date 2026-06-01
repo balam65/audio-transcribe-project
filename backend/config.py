@@ -80,8 +80,8 @@ class Config:
     SAMPLE_RATE: int = 16000  # 16kHz mono — optimal for Whisper
     CHANNELS: int = 1
     AUDIO_FORMAT_WIDTH: int = 2  # 16-bit PCM
-    LIVE_MIN_RMS: float = float(os.getenv("LIVE_MIN_RMS", "0.008"))
-    LIVE_MIN_PEAK: float = float(os.getenv("LIVE_MIN_PEAK", "0.04"))
+    LIVE_MIN_RMS: float = float(os.getenv("LIVE_MIN_RMS", "0.004"))
+    LIVE_MIN_PEAK: float = float(os.getenv("LIVE_MIN_PEAK", "0.025"))
     LIVE_TRANSCRIPTION_TIMEOUT_SECONDS: float = float(
         os.getenv("LIVE_TRANSCRIPTION_TIMEOUT_SECONDS", "12")
     )
@@ -116,6 +116,7 @@ class Config:
     # --- Storage ---
     DATABASE_PATH: str = os.getenv("DATABASE_PATH", "data/meetings.db")
     EXPORT_DIR: str = os.getenv("EXPORT_DIR", "data/exports")
+    LOCAL_RECORDING_DIR: str = os.getenv("LOCAL_RECORDING_DIR", "data/local_recordings")
 
     @classmethod
     def get_db_path(cls) -> Path:
@@ -128,6 +129,13 @@ class Config:
     def get_export_dir(cls) -> Path:
         """Get the absolute path to the export directory."""
         path = PROJECT_ROOT / cls.EXPORT_DIR
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @classmethod
+    def get_local_recording_dir(cls) -> Path:
+        """Get the absolute path to the local recording directory."""
+        path = PROJECT_ROOT / cls.LOCAL_RECORDING_DIR
         path.mkdir(parents=True, exist_ok=True)
         return path
 

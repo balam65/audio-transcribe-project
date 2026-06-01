@@ -161,6 +161,32 @@
             </div>
           </section>
 
+          <section class="studio-card">
+            <div class="card-header"><h2>Local Recording</h2></div>
+            <div class="card-body card-stack">
+              <div class="service-pill" id="local-recording-status">Records system audio locally in the backend. No model is needed to save the WAV file.</div>
+              <p class="upload-helper">Uses the selected system audio device above and saves a local `.wav` file when you stop.</p>
+              <div class="recording-indicator" id="local-recording-indicator">
+                <span class="rec-dot"></span>
+                <span class="rec-text">Recording locally</span>
+                <span class="rec-timer" id="local-rec-timer">00:00</span>
+              </div>
+              <div class="primary-actions">
+                <button class="btn btn-secondary btn-upload" id="btn-start-local-recording" type="button">Start local recording</button>
+                <button class="btn btn-danger btn-stop hidden" id="btn-stop-local-recording" type="button">Stop local recording</button>
+              </div>
+              <div class="file-meta-card">
+                <div class="file-meta-head">
+                  <span class="soft-pill" id="local-recording-file-pill">No recording yet</span>
+                  <span class="file-size" id="local-recording-file-size">0 B</span>
+                </div>
+                <strong class="file-name" id="local-recording-file-name">No local file yet</strong>
+                <p class="file-meta-copy" id="local-recording-file-meta">Start and stop to save a backend WAV file that is ready to download.</p>
+              </div>
+              <a class="btn btn-secondary btn-upload hidden" id="btn-download-local-recording" href="#" download>Download last recording</a>
+            </div>
+          </section>
+
           <!-- Exports (moved from right rail) -->
           <section class="studio-card">
             <div class="card-header"><h2>Export</h2></div>

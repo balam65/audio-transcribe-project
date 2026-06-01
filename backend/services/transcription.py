@@ -27,6 +27,7 @@ from config import config
 
 logger = logging.getLogger(__name__)
 _GLOSSARY_CACHE: dict[str, object] = {"path": None, "mtime": None, "entries": []}
+LOCAL_RECORDING_ENGINE = "faster-whisper"
 
 try:
     from faster_whisper import WhisperModel
@@ -345,10 +346,8 @@ def _apply_glossary_corrections(text: str) -> str:
     return re.sub(r"\s+", " ", corrected).strip()
 
 
-def get_transcription_provider_status() -> dict:
-    """Return health information for the configured transcription provider."""
-
-    engine = config.TRANSCRIPTION_ENGINE.lower()
+def _get_transcription_provider_status(engine: str) -> dict:
+    """Return health information for a specific transcription provider."""
 
     if engine == "openai":
         key_present = bool(config.OPENAI_API_KEY)
@@ -394,6 +393,18 @@ def get_transcription_provider_status() -> dict:
         "model": "",
         "detail": f"Unsupported TRANSCRIBE_ENGINE `{config.TRANSCRIPTION_ENGINE}`.",
     }
+
+
+def get_transcription_provider_status() -> dict:
+    """Return health information for the configured transcription provider."""
+
+    return _get_transcription_provider_status(config.TRANSCRIPTION_ENGINE.lower())
+
+
+def get_local_recording_provider_status() -> dict:
+    """Return health information for the built-in local recording engine."""
+
+    return _get_transcription_provider_status(LOCAL_RECORDING_ENGINE)
 
 
 def _is_hallucination_text(text: str) -> bool:
@@ -575,18 +586,19 @@ def _should_skip_live_chunk(audio_data: np.ndarray) -> bool:
 
     rms, peak = _get_live_signal_stats(audio_data)
 
-    # Primary gate: must exceed both minimum thresholds
-    if rms < config.LIVE_MIN_RMS or peak < config.LIVE_MIN_PEAK:
+    # Primary gate: allow quieter but still speech-like meeting chunks through.
+    # Requiring both metrics to be low avoids throwing away softer Zoom voices.
+    if rms < config.LIVE_MIN_RMS and peak < config.LIVE_MIN_PEAK:
         return True
 
     # Secondary gate: if energy is borderline, require sustained signal.
     # This catches Bluetooth codec noise that has occasional spikes but low RMS.
-    if rms < config.LIVE_MIN_RMS * 2.0 and peak < config.LIVE_MIN_PEAK * 1.5:
+    if rms < config.LIVE_MIN_RMS * 1.5 and peak < config.LIVE_MIN_PEAK * 1.35:
         # Check if at least 10% of samples exceed the dynamic minimum amplitude
         sample_threshold = config.LIVE_MIN_RMS * 0.4
         active_samples = np.sum(np.abs(audio_data) > sample_threshold)
         active_ratio = active_samples / max(audio_data.size, 1)
-        if active_ratio < 0.10:
+        if active_ratio < 0.06:
             return True
 
     return False
@@ -1425,13 +1437,14 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
 class TranscriptionService:
     """Main transcription service with configurable provider selection."""
 
-    def __init__(self):
+    def __init__(self, engine_name: Optional[str] = None):
         self._engine: Optional[BaseTranscriptionEngine] = None
+        self._preferred_engine = (engine_name or config.TRANSCRIPTION_ENGINE).lower()
 
     def initialize(self):
         """Initialize the configured transcription engine."""
 
-        engine_name = config.TRANSCRIPTION_ENGINE.lower()
+        engine_name = self._preferred_engine
 
         if engine_name == "openai":
             self._engine = OpenAITranscriptionEngine()
@@ -1439,7 +1452,7 @@ class TranscriptionService:
             self._engine = LocalTranscriptionEngine()
         else:
             raise RuntimeError(
-                f"Unsupported TRANSCRIBE_ENGINE `{config.TRANSCRIPTION_ENGINE}`."
+                f"Unsupported TRANSCRIBE_ENGINE `{engine_name}`."
             )
 
         self._engine.load_model()
@@ -1485,7 +1498,10 @@ class TranscriptionService:
         # For normal English live audio, never let a chat model rewrite the wording.
         # That can turn noisy Zoom chunks into fluent but incorrect sentences.
         if non_ascii_ratio < 0.08:
-            if confidence < max(config.CONFIDENCE_THRESHOLD, 0.52) and len(words) <= 4:
+            # Keep weak but plausible live English chunks visible instead of
+            # collapsing whole meetings to zero words. Only drop the most
+            # obviously empty fragments.
+            if confidence < 0.22 and len(words) <= 1:
                 return "", True
             return cleaned, False
 
@@ -1493,7 +1509,7 @@ class TranscriptionService:
         # unless they are clearly non-English and reasonably confident.
         if config.LIVE_NORMALIZE_NON_ENGLISH_ONLY:
             if non_ascii_ratio < 0.18:
-                if confidence < max(config.CONFIDENCE_THRESHOLD, 0.58):
+                if confidence < 0.24 and len(words) <= 1:
                     return "", True
                 return cleaned, False
 
@@ -1655,5 +1671,5 @@ class TranscriptionService:
     @property
     def engine_type(self) -> str:
         if not self._engine:
-            return config.TRANSCRIPTION_ENGINE.lower()
+            return self._preferred_engine
         return self._engine.provider_name
