@@ -32,6 +32,11 @@ sudo apt install ffmpeg portaudio19-dev pulseaudio-utils
 ```bash
 python3 -m venv venv
 source venv/bin/activate
+pip install -r backend/requirements-local.txt
+```
+
+For hosted/upload-only deployments where local audio capture is not needed:
+```bash
 pip install -r backend/requirements.txt
 ```
 
@@ -114,6 +119,7 @@ Tradeoffs in the free setup:
 - local files are ephemeral
 - SQLite meeting history and export files can disappear after restart or redeploy
 - uploaded-file transcription still works, but stored records are not durable
+- `PyAudio` is intentionally excluded from the hosted requirements because Render does not need local machine audio capture
 
 ### Hosted-mode limitation
 

@@ -4,8 +4,7 @@ uvicorn[standard]>=0.34.0
 websockets>=14.0
 python-multipart>=0.0.18
 
-# Audio processing
-PyAudio>=0.2.14
+# Core audio/transcription processing
 numpy>=1.26.0
 soundfile>=0.12.0
 pydub>=0.25.0
