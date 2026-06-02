@@ -82,7 +82,7 @@ This repo now supports a proper hosted mode for public deployment:
 - **Server-side auth** protects API routes and WebSocket access with signed sessions
 - **Hosted mode** disables Linux-only local audio capture features that do not work from a cloud server
 - **Uploaded-file transcription** remains available for shared/public use
-- **Persistent disk support** is included via `render.yaml` for SQLite data and exports
+- **Free Render option** is available, with ephemeral storage tradeoffs
 
 ### Render deployment
 
@@ -103,6 +103,17 @@ SESSION_SECRET=generate-a-random-secret
 OPENAI_API_KEY=your-provider-key
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
+
+### Free Render mode
+
+The included `render.yaml` is set up for a free Render web service.
+
+Tradeoffs in the free setup:
+
+- the service can sleep after inactivity
+- local files are ephemeral
+- SQLite meeting history and export files can disappear after restart or redeploy
+- uploaded-file transcription still works, but stored records are not durable
 
 ### Hosted-mode limitation
 

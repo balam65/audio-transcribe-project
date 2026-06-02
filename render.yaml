@@ -2,7 +2,7 @@ services:
   - type: web
     name: meeting-transcriber
     runtime: docker
-    plan: starter
+    plan: free
     region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
@@ -44,7 +44,3 @@ services:
         sync: false
       - key: OPENAI_PROJECT
         sync: false
-    disk:
-      name: app-data
-      mountPath: /app/data
-      sizeGB: 5
