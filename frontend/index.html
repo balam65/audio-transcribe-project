@@ -41,18 +41,22 @@
     </div>
     <div class="gate__card" role="main" aria-labelledby="gate-heading">
       <div class="gate__card-glow" aria-hidden="true"></div>
-      <div class="gate__pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>LOCAL DEMO GATE</div>
-      <h1 class="gate__heading" id="gate-heading">Speak the secret<br>words to <em>enter.</em></h1>
-      <p class="gate__copy">This local gate is guarded by flame and memory. Speak the word and the beast will let you pass.</p>
+      <div class="gate__pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>SECURE ACCESS GATE</div>
+      <h1 class="gate__heading" id="gate-heading">Enter your<br>credentials to <em>continue.</em></h1>
+      <p class="gate__copy" id="gate-copy">This studio now uses server-side access control. Sign in to open the workspace.</p>
       <form id="login-form" class="gate__form" autocomplete="off" novalidate>
-        <label class="gate__label" for="secret-word">SECRET WORD</label>
+        <label class="gate__label" for="access-username">USERNAME</label>
+        <div class="gate__input-wrap">
+          <input id="access-username" name="access-username" type="text" class="gate__input" placeholder="Enter username" spellcheck="false" autocapitalize="none" autocomplete="username">
+        </div>
+        <label class="gate__label" for="secret-word">PASSWORD</label>
         <div class="gate__input-wrap" id="gate-input-wrap">
-          <input id="secret-word" name="secret-word" type="password" class="gate__input" placeholder="Whisper the word..." spellcheck="false" autocapitalize="none" autocomplete="off" aria-describedby="gate-feedback">
+          <input id="secret-word" name="secret-word" type="password" class="gate__input" placeholder="Enter password" spellcheck="false" autocapitalize="none" autocomplete="current-password" aria-describedby="gate-feedback">
           <button class="gate__eye-btn" id="gate-visibility" type="button" aria-label="Toggle visibility" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.2 12s3.3-6.4 9.8-6.4 9.8 6.4 9.8 6.4-3.3 6.4-9.8 6.4S2.2 12 2.2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></button>
         </div>
         <p class="gate__feedback" id="gate-feedback" role="alert" aria-live="assertive">The beast is watching.</p>
-        <button class="gate__btn" id="btn-enter-gate" type="submit"><span id="gate-btn-text">Enter the Gate</span><svg class="gate__btn-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <p class="gate__note">Local demo access only. Accepted words are trimmed, case-insensitive, and checked only in this client session.</p>
+        <button class="gate__btn" id="btn-enter-gate" type="submit"><span id="gate-btn-text">Sign In</span><svg class="gate__btn-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <p class="gate__note" id="gate-note">Authenticated sessions are checked by the backend before API and WebSocket access is allowed.</p>
       </form>
     </div>
     <div class="gate__badges">
@@ -92,11 +96,11 @@
 
         <!-- LEFT: Controls -->
         <aside class="left-rail">
-          <!-- Meeting Controls -->
-          <section class="studio-card">
-            <div class="card-header"><h2>Meeting Controls</h2></div>
+          <section class="studio-card" id="live-capture-card">
+            <div class="card-header"><h2>Live Capture</h2></div>
             <div class="card-body card-stack">
               <div class="service-pill" id="summary-status">Checking summary provider…</div>
+              <div class="service-pill" id="live-capture-status">Live capture is available when the backend can access local system audio devices.</div>
               <div class="form-group">
                 <label for="input-title">Meeting title</label>
                 <input type="text" id="input-title" class="form-input" placeholder="Auto-generate if blank">
@@ -135,7 +139,7 @@
           </section>
 
           <!-- Audio File Upload -->
-          <section class="studio-card studio-card-accent">
+          <section class="studio-card studio-card-accent" id="upload-card">
             <div class="card-header"><h2>Audio File</h2></div>
             <div class="card-body card-stack">
               <label class="file-picker" for="input-audio-file">
@@ -161,7 +165,7 @@
             </div>
           </section>
 
-          <section class="studio-card local-recording-card">
+          <section class="studio-card local-recording-card" id="local-recording-card">
             <div class="card-header"><h2>Local Recording</h2></div>
             <div class="card-body card-stack">
               <div class="service-pill" id="local-recording-status">Records system audio locally in the backend. No model is needed to save the WAV file.</div>
@@ -333,7 +337,7 @@
             </div>
           </section>
 
-          <details class="studio-card diagnostics-collapse">
+          <details class="studio-card diagnostics-collapse" id="audio-diagnostics-card">
             <summary class="card-header diag-toggle">
               <h2>Audio Diagnostics</h2>
               <button class="btn btn-ghost btn-icon" id="btn-refresh-audio" type="button">Refresh</button>

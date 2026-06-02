@@ -14,9 +14,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from config import config
 from models.database import init_db
+from routes.auth import router as auth_router
 from routes.transcription import router as transcription_router
 from routes.meetings import router as meetings_router
 from routes.export import router as export_router
@@ -55,6 +57,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+if config.SESSION_SECRET:
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=config.SESSION_SECRET,
+        same_site="lax",
+        https_only=config.hosted_mode(),
+        max_age=60 * 60 * 24 * 14,
+    )
+
 # CORS middleware (allow frontend on same machine)
 app.add_middleware(
     CORSMiddleware,
@@ -65,6 +76,7 @@ app.add_middleware(
 )
 
 # Include API routers
+app.include_router(auth_router)
 app.include_router(transcription_router)
 app.include_router(meetings_router)
 app.include_router(export_router)
@@ -94,6 +106,10 @@ async def health():
     summary_status = get_summary_provider_status()
     return {
         "status": "ok",
+        "app_mode": config.APP_MODE,
+        "auth_required": config.AUTH_REQUIRED,
+        "auth_configured": config.auth_configured(),
+        "capabilities": config.capabilities(),
         "engine": config.TRANSCRIPTION_ENGINE,
         "transcription_engine": config.TRANSCRIPTION_ENGINE,
         "transcription_model": transcription_status["model"],

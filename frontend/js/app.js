@@ -1,12 +1,18 @@
 const App = {
-  AUTH_KEY: 'jamaluuu-studio-access',
-  ACCEPTED_SECRET_WORDS: ['jamalu', 'jamaluuu'],
-
   ws: null,
   isRecording: false,
   isUploading: false,
   isBooted: false,
   isAuthenticated: false,
+  authUser: '',
+  authRequired: false,
+  authConfigured: true,
+  appMode: 'desktop',
+  capabilities: {
+    live_capture: true,
+    local_recording: true,
+    file_upload: true,
+  },
   meetingId: null,
   segments: [],
   summaryData: null,
@@ -35,16 +41,11 @@ const App = {
   hasShownPrivacyToast: false,
   supportsPause: false,
 
-  init() {
+  async init() {
     this.bindEvents();
     this.initializeInterface();
-
-    if (sessionStorage.getItem(this.AUTH_KEY) === 'true') {
-      this.authenticate({ showWelcome: false });
-      return;
-    }
-
-    this.showGate();
+    await this.loadHealth();
+    await this.restoreSession();
   },
 
   bindEvents() {
@@ -90,15 +91,15 @@ const App = {
   initializeInterface() {
     this.syncMicVisibility();
     this.updateMicSelectionUI();
-    this.setMeetingContext('', 'Capture live meetings or upload a recording to begin a transcription session.');
+    this.setMeetingContext('', this.getIdleSubtitle());
     this.renderTranscriptPlaceholder(
       '◎',
       'Ready to transcribe',
-      'Start a live capture or upload a recording to fill this studio with a searchable transcript.'
+      this.getIdleTranscriptDescription()
     );
     this.showSummaryPlaceholder(
       'Summary ready when the transcript is complete',
-      'Stop a live session or finish an uploaded file to generate key points, action items, decisions, and follow-ups.',
+      this.getIdleSummaryDescription(),
       false
     );
     this.setUploadState('empty');
@@ -112,15 +113,48 @@ const App = {
     this.updateUI();
   },
 
+  async restoreSession() {
+    try {
+      const response = await this.apiFetch('/api/auth/me', { suppressUnauthorizedRedirect: true });
+      const data = await response.json();
+      this.applyServerContext(data);
+
+      if (data.authenticated) {
+        this.authenticate({ showWelcome: false, username: data.username || '' });
+        return;
+      }
+    } catch (error) {
+      console.warn('Could not restore session:', error);
+    }
+
+    this.showGate();
+  },
+
+  applyServerContext(data = {}) {
+    this.appMode = data.app_mode || this.appMode || 'desktop';
+    this.authRequired = data.auth_required ?? this.authRequired;
+    this.authConfigured = data.auth_configured ?? this.authConfigured;
+    this.capabilities = {
+      ...this.capabilities,
+      ...(data.capabilities || {}),
+    };
+
+    this.updateCapabilityUI();
+  },
+
   showGate() {
     this.isAuthenticated = false;
+    this.authUser = '';
     document.body.classList.remove('authenticated', 'app-welcome');
     const gate = document.getElementById('login-gate');
+    const usernameInput = document.getElementById('access-username');
     const secretInput = document.getElementById('secret-word');
     const feedback = document.getElementById('gate-feedback');
     const submit = document.getElementById('btn-enter-gate');
     const submitText = document.getElementById('gate-btn-text');
     const toggle = document.getElementById('gate-visibility');
+    const note = document.getElementById('gate-note');
+    const copy = document.getElementById('gate-copy');
 
     gate?.classList.remove(
       'bg-gate--error',
@@ -129,63 +163,107 @@ const App = {
       'bg-gate--welcome',
       'bg-gate--error-active'
     );
-    if (feedback) feedback.textContent = 'The beast is watching.';
+    if (feedback) {
+      if (this.authRequired && !this.authConfigured) {
+        feedback.textContent = 'Server auth is not configured yet.';
+      } else {
+        feedback.textContent = this.appMode === 'hosted'
+          ? 'Sign in to access the hosted studio.'
+          : 'Sign in to access the studio.';
+      }
+    }
+    if (copy) {
+      copy.textContent = this.appMode === 'hosted'
+        ? 'This hosted studio supports uploaded-file transcription with backend-protected sessions.'
+        : 'This studio uses server-side sessions. Sign in to open the workspace.';
+    }
+    if (note) {
+      note.textContent = this.appMode === 'hosted'
+        ? 'Hosted mode keeps upload-based transcription available and disables local machine audio capture.'
+        : 'API routes and WebSocket access are protected by the backend session.';
+    }
+    if (usernameInput) {
+      usernameInput.value = '';
+      usernameInput.disabled = false;
+    }
     if (secretInput) {
       secretInput.value = '';
       secretInput.type = 'password';
       secretInput.disabled = false;
-      window.setTimeout(() => secretInput.focus(), 120);
+      window.setTimeout(() => (usernameInput || secretInput).focus(), 120);
     }
     if (toggle) {
       toggle.setAttribute('aria-pressed', 'false');
-      toggle.setAttribute('aria-label', 'Reveal secret word');
+      toggle.setAttribute('aria-label', 'Reveal password');
     }
     if (submit) {
-      submit.disabled = false;
+      submit.disabled = !this.authConfigured;
     }
-    if (submitText) submitText.textContent = 'Enter the Gate';
+    if (submitText) submitText.textContent = 'Sign In';
   },
 
-  handleGateSubmit(event) {
+  async handleGateSubmit(event) {
     event.preventDefault();
 
     const gate = document.getElementById('login-gate');
+    const usernameInput = document.getElementById('access-username');
     const secretInput = document.getElementById('secret-word');
     const feedback = document.getElementById('gate-feedback');
     const submit = document.getElementById('btn-enter-gate');
     const submitText = document.getElementById('gate-btn-text');
-    const normalized = (secretInput?.value || '').trim().toLowerCase();
+    const username = (usernameInput?.value || '').trim();
+    const password = secretInput?.value || '';
 
-    if (!this.ACCEPTED_SECRET_WORDS.includes(normalized)) {
+    if (!username || !password) {
       gate?.classList.remove('bg-gate--success');
       gate?.classList.add('bg-gate--error');
-      if (feedback) feedback.textContent = 'That is not the word, traveler.';
-      if (submitText) submitText.textContent = 'Enter the Gate';
-      this.showToast('Incorrect secret word', 'error');
+      if (feedback) feedback.textContent = 'Username and password are both required.';
+      this.showToast('Enter your username and password', 'error');
       window.setTimeout(() => gate?.classList.remove('bg-gate--error'), 820);
-      secretInput?.focus();
-      secretInput?.select();
+      (usernameInput || secretInput)?.focus();
       return;
     }
 
-    gate?.classList.remove('bg-gate--error');
-    gate?.classList.add('bg-gate--success');
-    if (feedback) feedback.textContent = 'Welcome to Jamaluuu World';
-    if (secretInput) secretInput.disabled = true;
-    if (submit) {
-      submit.disabled = true;
-    }
-    if (submitText) submitText.textContent = 'Entering...';
+    if (submit) submit.disabled = true;
+    if (submitText) submitText.textContent = 'Signing in...';
 
-    window.setTimeout(() => {
+    try {
+      const response = await this.apiFetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+        suppressUnauthorizedRedirect: true,
+      });
+      const data = await response.json();
+
+      gate?.classList.remove('bg-gate--error');
+      gate?.classList.add('bg-gate--success');
+      if (feedback) feedback.textContent = 'Welcome to Jamaluuu World';
+      if (usernameInput) usernameInput.disabled = true;
+      if (secretInput) secretInput.disabled = true;
+      if (submitText) submitText.textContent = 'Entering...';
+      this.applyServerContext(data);
+
+      window.setTimeout(() => {
+        gate?.classList.remove('bg-gate--success');
+        this.authenticate({ showWelcome: true, username: data.username || username });
+      }, 320);
+    } catch (error) {
       gate?.classList.remove('bg-gate--success');
-      this.authenticate({ showWelcome: true });
-    }, 320);
+      gate?.classList.add('bg-gate--error');
+      if (feedback) feedback.textContent = error.message || 'Sign-in failed.';
+      if (submit) submit.disabled = false;
+      if (submitText) submitText.textContent = 'Sign In';
+      this.showToast(error.message || 'Sign-in failed', 'error');
+      window.setTimeout(() => gate?.classList.remove('bg-gate--error'), 820);
+      secretInput?.focus();
+      secretInput?.select();
+    }
   },
 
-  authenticate({ showWelcome = false } = {}) {
+  authenticate({ showWelcome = false, username = '' } = {}) {
     this.isAuthenticated = true;
-    sessionStorage.setItem(this.AUTH_KEY, 'true');
+    this.authUser = username || this.authUser || '';
     document.body.classList.add('authenticated');
 
     if (showWelcome) {
@@ -207,11 +285,13 @@ const App = {
   bootApp() {
     this.isBooted = true;
     this.loadHealth();
-    this.loadDevices();
-    this.loadAudioDebug();
     this.loadHistory();
-    this.connectWebSocket();
-    this.startDevicePolling();
+    if (this.capabilities.live_capture) {
+      this.loadDevices();
+      this.loadAudioDebug();
+      this.connectWebSocket();
+      this.startDevicePolling();
+    }
 
     if (!this.hasShownPrivacyToast) {
       this.hasShownPrivacyToast = true;
@@ -220,24 +300,38 @@ const App = {
   },
 
   resumeApp() {
-    if (!this.ws || this.connectionState === 'disconnected') {
+    if (this.capabilities.live_capture && (!this.ws || this.connectionState === 'disconnected')) {
       this.connectWebSocket();
     }
     this.loadHealth();
-    this.loadDevices();
-    this.loadAudioDebug();
     this.loadHistory();
-    this.startDevicePolling();
+    if (this.capabilities.live_capture) {
+      this.loadDevices();
+      this.loadAudioDebug();
+      this.startDevicePolling();
+    }
   },
 
-  lockStudio() {
+  async lockStudio(options = {}) {
     if (this.isRecording || this.isUploading || this.isLocalRecording) {
       this.showToast('Stop the active recording before locking the studio', 'error');
       return;
     }
 
-    sessionStorage.removeItem(this.AUTH_KEY);
+    try {
+      if (!options.skipServerLogout) {
+        await fetch('/api/auth/logout', { method: 'POST' });
+      }
+    } catch (error) {
+      console.warn('Could not end server session:', error);
+    }
+
+    this.completeLogout(options);
+  },
+
+  completeLogout(options = {}) {
     this.isAuthenticated = false;
+    this.authUser = '';
     document.body.classList.remove('authenticated', 'app-welcome');
 
     if (this.ws) {
@@ -248,11 +342,110 @@ const App = {
     this.connectionState = 'disconnected';
     this.stopDevicePolling();
     this.stopAudioDebugPolling();
-    this.onConnectionChange('disconnected');
+    this.setConnectionLabel(this.capabilities.live_capture ? 'disconnected' : 'upload-only');
+    this.connectionState = this.capabilities.live_capture ? 'disconnected' : 'upload-only';
     this.showGate();
+
+    if (!options.silent) {
+      this.showToast(options.reason || 'Signed out', 'info');
+    }
+  },
+
+  async apiFetch(url, options = {}) {
+    const { suppressUnauthorizedRedirect = false, ...fetchOptions } = options;
+    const response = await fetch(url, fetchOptions);
+    if (response.status === 401) {
+      if (!suppressUnauthorizedRedirect) {
+        this.handleUnauthorized();
+      }
+      throw new Error('Please sign in again.');
+    }
+    return response;
+  },
+
+  handleUnauthorized() {
+    this.completeLogout({
+      skipServerLogout: true,
+      reason: 'Your session expired. Please sign in again.',
+    });
+  },
+
+  setConnectionLabel(state) {
+    const dot = document.getElementById('connection-dot');
+    const text = document.getElementById('connection-text');
+
+    if (dot) {
+      dot.className = 'connection-dot';
+      if (this.isRecording) {
+        dot.classList.add('recording');
+      } else if (state === 'connected') {
+        dot.classList.add('connected');
+      }
+    }
+
+    if (text) {
+      text.textContent = state === 'connected'
+        ? 'Connected'
+        : state === 'upload-only'
+          ? 'Upload only'
+          : 'Disconnected';
+    }
+  },
+
+  updateCapabilityUI() {
+    const liveCard = document.getElementById('live-capture-card');
+    const localCard = document.getElementById('local-recording-card');
+    const diagnostics = document.getElementById('audio-diagnostics-card');
+    const liveStatus = document.getElementById('live-capture-status');
+    const headerSubtitle = document.querySelector('.app-subtitle');
+    const brandSubtitle = document.querySelector('.gate__brand-sub');
+
+    if (headerSubtitle) {
+      headerSubtitle.textContent = this.appMode === 'hosted'
+        ? 'Hosted transcription workspace'
+        : 'Local AI Transcription Studio';
+    }
+    if (brandSubtitle) {
+      brandSubtitle.textContent = this.appMode === 'hosted'
+        ? 'Hosted AI Transcription Workspace'
+        : 'Local AI Transcription Studio';
+    }
+
+    if (liveCard) {
+      liveCard.classList.toggle('hidden', !this.capabilities.live_capture);
+    }
+    if (localCard) {
+      localCard.classList.toggle('hidden', !this.capabilities.local_recording);
+    }
+    if (diagnostics) {
+      diagnostics.classList.toggle('hidden', !this.capabilities.live_capture);
+    }
+    if (liveStatus) {
+      liveStatus.textContent = this.capabilities.live_capture
+        ? 'Live capture is available when the backend can access local system audio devices.'
+        : 'Hosted mode disables server-side local audio capture. Use uploaded files instead.';
+    }
+
+    if (!this.capabilities.live_capture && !this.isRecording) {
+      this.connectionState = 'upload-only';
+      this.setConnectionLabel('upload-only');
+    }
+
+    this.setMeetingContext(
+      this.activeMeetingTitle,
+      this.capabilities.live_capture
+        ? 'Capture live meetings or upload a recording to begin a transcription session.'
+        : 'Upload an audio or meeting recording file to transcribe it in the hosted workspace.'
+    );
   },
 
   connectWebSocket() {
+    if (!this.capabilities.live_capture) {
+      this.connectionState = 'upload-only';
+      this.setConnectionLabel('upload-only');
+      return;
+    }
+
     if (this.ws) {
       this.ws.disconnect();
     }
@@ -272,6 +465,7 @@ const App = {
     try {
       const response = await fetch('/health');
       const data = await response.json();
+      this.applyServerContext(data);
       this.updateTranscriptionStatus(data);
       this.updateSummaryStatus(data);
     } catch (error) {
@@ -303,7 +497,10 @@ const App = {
     let label = 'Transcription offline';
     let statusClass = 'warning';
 
-    if (ready && modelAvailable) {
+    if (!this.capabilities.file_upload) {
+      label = 'Transcription unavailable';
+      statusClass = 'warning';
+    } else if (ready && modelAvailable) {
       label = provider;
       statusClass = 'success';
     }
@@ -358,8 +555,15 @@ const App = {
   },
 
   async loadDevices() {
+    if (!this.capabilities.live_capture) {
+      this.connectedBluetoothDevices = [];
+      this.bluetoothDevices = [];
+      this.defaultSource = '';
+      this.updateMicSelectionUI([]);
+      return;
+    }
     try {
-      const response = await fetch('/api/transcription/devices');
+      const response = await this.apiFetch('/api/transcription/devices');
       const data = await response.json();
       this.connectedBluetoothDevices = Array.isArray(data.connected_bluetooth_devices)
         ? data.connected_bluetooth_devices
@@ -559,8 +763,19 @@ const App = {
   },
 
   async loadAudioDebug() {
+    if (!this.capabilities.live_capture) {
+      this.renderAudioDebug({
+        recording: false,
+        capture_target: null,
+        default_sink: null,
+        meeting_streams: [],
+        active_capture: [],
+        hosted_message: 'Hosted mode does not expose local audio routing.',
+      });
+      return;
+    }
     try {
-      const response = await fetch('/api/transcription/audio-debug');
+      const response = await this.apiFetch('/api/transcription/audio-debug');
       const data = await response.json();
       this.renderAudioDebug(data);
     } catch (error) {
@@ -595,7 +810,10 @@ const App = {
     const meetingStreams = (data.meeting_streams || []).join(', ') || 'None detected';
     const qualityWarning = data.quality_warning || '';
 
-    if (data.recording) {
+    if (!this.capabilities.live_capture && data.hosted_message) {
+      pill.classList.add('warning');
+      pill.textContent = 'Upload-only hosted mode';
+    } else if (data.recording) {
       pill.classList.add('live');
       pill.textContent = `Live capture active${data.meeting_title ? `: ${data.meeting_title}` : ''}`;
     } else {
@@ -615,7 +833,9 @@ const App = {
     sink.textContent = data.default_sink || 'Unknown';
     streams.textContent = meetingStreams;
 
-    if (qualityWarning) {
+    if (!this.capabilities.live_capture && data.hosted_message) {
+      note.textContent = data.hosted_message;
+    } else if (qualityWarning) {
       note.textContent = qualityWarning;
     } else if (data.capture_target === 'meeting_stream') {
       note.textContent = 'Best case: the app can see a direct meeting stream like Zoom.';
@@ -649,6 +869,7 @@ const App = {
   },
 
   startDevicePolling() {
+    if (!this.capabilities.live_capture) return;
     this.stopDevicePolling();
     this.devicePollInterval = window.setInterval(() => {
       if (this.isRecording || this.isUploading || !this.isAuthenticated) return;
@@ -666,8 +887,8 @@ const App = {
 
   async loadHistory() {
     try {
-      const [meetingsData, recordingsData] = await Promise.all([
-        fetch('/api/meetings/')
+      const requests = [
+        this.apiFetch('/api/meetings/')
           .then(async (response) => {
             if (!response.ok) throw new Error('Could not load meetings');
             return response.json();
@@ -676,16 +897,25 @@ const App = {
             console.warn('Could not load meetings:', error);
             return { meetings: [] };
           }),
-        fetch('/api/transcription/local-recording/files')
-          .then(async (response) => {
-            if (!response.ok) throw new Error('Could not load local recordings');
-            return response.json();
-          })
-          .catch((error) => {
-            console.warn('Could not load local recordings:', error);
-            return { recordings: [] };
-          }),
-      ]);
+      ];
+
+      if (this.capabilities.local_recording) {
+        requests.push(
+          this.apiFetch('/api/transcription/local-recording/files')
+            .then(async (response) => {
+              if (!response.ok) throw new Error('Could not load local recordings');
+              return response.json();
+            })
+            .catch((error) => {
+              console.warn('Could not load local recordings:', error);
+              return { recordings: [] };
+            })
+        );
+      } else {
+        requests.push(Promise.resolve({ recordings: [] }));
+      }
+
+      const [meetingsData, recordingsData] = await Promise.all(requests);
 
       this.localRecordingFiles = Array.isArray(recordingsData.recordings) ? recordingsData.recordings : [];
       this.renderLocalRecordingLibrary(this.localRecordingFiles);
@@ -707,7 +937,7 @@ const App = {
         <div class="transcript-empty compact-empty">
           <div class="transcript-empty-icon">◌</div>
           <h3>No history yet</h3>
-          <p>Completed live sessions, uploaded files, and local recordings will appear here.</p>
+          <p>Completed transcriptions will appear here.</p>
         </div>
       `;
       return;
@@ -840,6 +1070,10 @@ const App = {
   },
 
   startRecording() {
+    if (!this.capabilities.live_capture) {
+      this.showToast('Hosted mode supports uploaded-file transcription only.', 'info');
+      return;
+    }
     if (this.isRecording || this.isUploading || this.isLocalRecording) return;
 
     const title = this.ensureMeetingTitle('Meeting');
@@ -912,13 +1146,17 @@ const App = {
   },
 
   async startLocalRecording() {
+    if (!this.capabilities.local_recording) {
+      this.showToast('Local recording is only available in desktop mode.', 'info');
+      return;
+    }
     if (this.isRecording || this.isUploading || this.isLocalRecording) return;
 
     const title = this.ensureMeetingTitle('Local Recording');
     const systemDeviceIndex = document.getElementById('select-system-device')?.value || null;
 
     try {
-      const response = await fetch('/api/transcription/local-recording/start', {
+      const response = await this.apiFetch('/api/transcription/local-recording/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -959,7 +1197,7 @@ const App = {
     if (!this.isLocalRecording) return;
 
     try {
-      const response = await fetch('/api/transcription/local-recording/stop', {
+      const response = await this.apiFetch('/api/transcription/local-recording/stop', {
         method: 'POST',
       });
       const data = await response.json();
@@ -1046,23 +1284,7 @@ const App = {
 
   onConnectionChange(state) {
     this.connectionState = state;
-
-    const dot = document.getElementById('connection-dot');
-    const text = document.getElementById('connection-text');
-
-    if (dot) {
-      dot.className = 'connection-dot';
-      if (this.isRecording) {
-        dot.classList.add('recording');
-      } else if (state === 'connected') {
-        dot.classList.add('connected');
-      }
-    }
-
-    if (text) {
-      text.textContent = state === 'connected' ? 'Connected' : 'Disconnected';
-    }
-
+    this.setConnectionLabel(state);
     this.updateUI();
     this.updateHeroSignals();
   },
@@ -1146,7 +1368,7 @@ const App = {
     this.onStatus('Processing uploaded audio file...', 'info');
 
     try {
-      const response = await fetch('/api/transcription/file', {
+      const response = await this.apiFetch('/api/transcription/file', {
         method: 'POST',
         body: formData,
       });
@@ -1167,7 +1389,9 @@ const App = {
       this.showToast('Audio file transcribed successfully', 'success');
       this.loadHistory();
       this.loadHealth();
-      this.loadAudioDebug();
+      if (this.capabilities.live_capture) {
+        this.loadAudioDebug();
+      }
     } catch (error) {
       this.meetingId = null;
       this.segments = [];
@@ -1483,7 +1707,7 @@ const App = {
 
     const currentTitle = this.activeMeetingTitle || 'Ready to transcribe';
     const heroTitle = this.activeMeetingTitle || 'Ready for the next meeting';
-    const heroSubtitle = subtitle || 'Capture live meetings or upload a recording to begin a transcription session.';
+    const heroSubtitle = subtitle || this.getIdleSubtitle();
 
     this.setText('current-meeting-title', currentTitle);
     this.setText('hero-meeting-title', heroTitle);
@@ -1506,13 +1730,15 @@ const App = {
       ? 'Live capture'
       : this.isLocalRecording
         ? 'Local recording'
-      : this.isUploading
-        ? 'Uploaded file'
+        : this.isUploading
+          ? 'Uploaded file'
         : this.activeMode === 'review'
           ? 'Reviewing meeting'
-          : 'Live + file';
+          : (this.capabilities.live_capture ? 'Live + file' : 'Upload only');
 
-    const routeLabel = this.audioDebugData?.capture_target === 'meeting_stream'
+    const routeLabel = !this.capabilities.live_capture
+      ? 'Uploads only'
+      : this.audioDebugData?.capture_target === 'meeting_stream'
       ? 'Meeting stream'
       : this.audioDebugData?.capture_target === 'sink_monitor'
         ? 'Sink monitor'
@@ -1546,6 +1772,8 @@ const App = {
     const localStopButton = document.getElementById('btn-stop-local-recording');
     const localIndicator = document.getElementById('local-recording-indicator');
     const isBusy = this.isRecording || this.isUploading || this.isLocalRecording;
+    const liveCaptureSupported = Boolean(this.capabilities.live_capture);
+    const localRecordingSupported = Boolean(this.capabilities.local_recording);
 
     if (recordingIndicator) {
       recordingIndicator.classList.toggle('active', this.isRecording);
@@ -1556,7 +1784,7 @@ const App = {
 
     if (startButton) {
       startButton.classList.toggle('hidden', this.isRecording);
-      startButton.disabled = this.isUploading || this.isLocalRecording;
+      startButton.disabled = !liveCaptureSupported || this.isUploading || this.isLocalRecording;
       startButton.textContent = 'Start transcription';
     }
 
@@ -1566,10 +1794,10 @@ const App = {
     }
 
     if (inlineStart) {
-      inlineStart.disabled = this.isRecording || this.isUploading || this.isLocalRecording;
+      inlineStart.disabled = !liveCaptureSupported || this.isRecording || this.isUploading || this.isLocalRecording;
       inlineStart.textContent = 'Start';
     }
-    if (inlineStop) inlineStop.disabled = !this.isRecording || this.isUploading;
+    if (inlineStop) inlineStop.disabled = !liveCaptureSupported || !this.isRecording || this.isUploading;
     if (pauseButton) pauseButton.disabled = true;
 
     if (uploadButton) {
@@ -1580,17 +1808,17 @@ const App = {
     if (fileInput) fileInput.disabled = isBusy;
     if (uploadTitle) uploadTitle.disabled = isBusy;
     if (titleInput) titleInput.disabled = isBusy;
-    if (systemSelect) systemSelect.disabled = isBusy;
-    if (micSelect) micSelect.disabled = isBusy;
-    if (micToggle) micToggle.disabled = isBusy;
+    if (systemSelect) systemSelect.disabled = isBusy || !liveCaptureSupported;
+    if (micSelect) micSelect.disabled = isBusy || !liveCaptureSupported;
+    if (micToggle) micToggle.disabled = isBusy || !liveCaptureSupported;
 
     if (localStartButton) {
       localStartButton.classList.toggle('hidden', this.isLocalRecording);
-      localStartButton.disabled = this.isRecording || this.isUploading;
+      localStartButton.disabled = !localRecordingSupported || this.isRecording || this.isUploading;
     }
     if (localStopButton) {
       localStopButton.classList.toggle('hidden', !this.isLocalRecording);
-      localStopButton.disabled = this.isRecording || this.isUploading;
+      localStopButton.disabled = !localRecordingSupported || this.isRecording || this.isUploading;
     }
     if (copyButton) copyButton.disabled = !this.segments.length;
     if (clearButton) clearButton.disabled = !this.segments.length || this.isRecording || this.isUploading || this.isLocalRecording;
@@ -1608,7 +1836,7 @@ const App = {
     const micToggle = document.getElementById('toggle-mic');
     const micDeviceGroup = document.getElementById('mic-device-group');
     if (!micToggle || !micDeviceGroup) return;
-    micDeviceGroup.style.display = micToggle.checked ? 'grid' : 'none';
+    micDeviceGroup.style.display = this.capabilities.live_capture && micToggle.checked ? 'grid' : 'none';
   },
 
   startLocalRecordingTimer() {
@@ -1759,15 +1987,15 @@ const App = {
     if (searchInput) searchInput.value = '';
 
     this.setUploadState('empty');
-    this.setMeetingContext('', 'Capture live meetings or upload a recording to begin a transcription session.');
+    this.setMeetingContext('', this.getIdleSubtitle());
     this.renderTranscriptPlaceholder(
       '◎',
       'Ready to transcribe',
-      'Start a live capture or upload a recording to fill this studio with a searchable transcript.'
+      this.getIdleTranscriptDescription()
     );
     this.showSummaryPlaceholder(
       'Summary ready when the transcript is complete',
-      'Stop a live session or finish an uploaded file to generate key points, action items, decisions, and follow-ups.',
+      this.getIdleSummaryDescription(),
       false
     );
     this.setActivity('idle', 'Ready', 'The configured providers are idle and waiting for the next session.');
@@ -1781,7 +2009,7 @@ const App = {
 
   async viewMeeting(id) {
     try {
-      const response = await fetch(`/api/meetings/${id}`);
+      const response = await this.apiFetch(`/api/meetings/${id}`);
       if (!response.ok) {
         throw new Error(await this.readErrorMessage(response));
       }
@@ -1808,7 +2036,9 @@ const App = {
       this.updateUI();
 
       this.stopAudioDebugPolling();
-      this.loadAudioDebug();
+      if (this.capabilities.live_capture) {
+        this.loadAudioDebug();
+      }
 
       if (meeting.summary) {
         this.renderSummary({
@@ -1846,7 +2076,7 @@ const App = {
     if (!window.confirm('Delete this meeting and all its data?')) return;
 
     try {
-      const response = await fetch(`/api/meetings/${id}`, { method: 'DELETE' });
+      const response = await this.apiFetch(`/api/meetings/${id}`, { method: 'DELETE' });
       if (!response.ok) {
         throw new Error(await this.readErrorMessage(response));
       }
@@ -2071,6 +2301,24 @@ const App = {
   setText(id, value) {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
+  },
+
+  getIdleSubtitle() {
+    return this.capabilities.live_capture
+      ? 'Capture live meetings or upload a recording to begin a transcription session.'
+      : 'Upload an audio or meeting recording file to begin a transcription session.';
+  },
+
+  getIdleTranscriptDescription() {
+    return this.capabilities.live_capture
+      ? 'Start a live capture or upload a recording to fill this studio with a searchable transcript.'
+      : 'Upload a recording to fill this studio with a searchable transcript.';
+  },
+
+  getIdleSummaryDescription() {
+    return this.capabilities.live_capture
+      ? 'Stop a live session or finish an uploaded file to generate key points, action items, decisions, and follow-ups.'
+      : 'Finish an uploaded file to generate key points, action items, decisions, and follow-ups.';
   },
 
   escapeHtml(text) {

@@ -23,6 +23,7 @@ markdown>=3.7
 
 # Environment
 python-dotenv>=1.0.0
+itsdangerous>=2.2.0
 
 # HTTP client (for OpenAI-compatible APIs and Ollama)
 httpx>=0.28.0
