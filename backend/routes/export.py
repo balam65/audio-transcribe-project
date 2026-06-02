@@ -9,18 +9,32 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from auth import require_authenticated_request
-from models.database import get_meeting, get_meeting_segments
-from services.export import (
-    export_transcript_txt,
-    export_transcript_md,
-    export_transcript_docx,
-    export_transcript_pdf,
-    export_summary_txt,
-    export_summary_md,
-    export_summary_docx,
-    export_summary_pdf,
-)
+try:
+    from ..auth import require_authenticated_request
+    from ..models.database import get_meeting, get_meeting_segments
+    from ..services.export import (
+        export_transcript_txt,
+        export_transcript_md,
+        export_transcript_docx,
+        export_transcript_pdf,
+        export_summary_txt,
+        export_summary_md,
+        export_summary_docx,
+        export_summary_pdf,
+    )
+except ImportError:
+    from auth import require_authenticated_request
+    from models.database import get_meeting, get_meeting_segments
+    from services.export import (
+        export_transcript_txt,
+        export_transcript_md,
+        export_transcript_docx,
+        export_transcript_pdf,
+        export_summary_txt,
+        export_summary_md,
+        export_summary_docx,
+        export_summary_pdf,
+    )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/export", tags=["export"])

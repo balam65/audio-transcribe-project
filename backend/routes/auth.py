@@ -5,8 +5,12 @@ Authentication routes for server-side login/logout/session checks.
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from auth import ensure_auth_configured, get_current_user
-from config import config
+try:
+    from ..auth import ensure_auth_configured, get_current_user
+    from ..config import config
+except ImportError:
+    from auth import ensure_auth_configured, get_current_user
+    from config import config
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 

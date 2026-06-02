@@ -16,14 +16,24 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from config import config
-from models.database import init_db
-from routes.auth import router as auth_router
-from routes.transcription import router as transcription_router
-from routes.meetings import router as meetings_router
-from routes.export import router as export_router
-from services.summary import get_summary_provider_status
-from services.transcription import get_transcription_provider_status
+try:
+    from .config import config
+    from .models.database import init_db
+    from .routes.auth import router as auth_router
+    from .routes.transcription import router as transcription_router
+    from .routes.meetings import router as meetings_router
+    from .routes.export import router as export_router
+    from .services.summary import get_summary_provider_status
+    from .services.transcription import get_transcription_provider_status
+except ImportError:
+    from config import config
+    from models.database import init_db
+    from routes.auth import router as auth_router
+    from routes.transcription import router as transcription_router
+    from routes.meetings import router as meetings_router
+    from routes.export import router as export_router
+    from services.summary import get_summary_provider_status
+    from services.transcription import get_transcription_provider_status
 
 # Configure logging
 logging.basicConfig(

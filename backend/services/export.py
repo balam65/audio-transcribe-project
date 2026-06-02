@@ -9,8 +9,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from config import config
-from services.post_process import format_timestamp
+try:
+    from ..config import config
+    from .post_process import format_timestamp
+except ImportError:
+    from config import config
+    from services.post_process import format_timestamp
 
 logger = logging.getLogger(__name__)
 

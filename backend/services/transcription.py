@@ -23,7 +23,10 @@ from typing import Optional
 import httpx
 import numpy as np
 
-from config import config
+try:
+    from ..config import config
+except ImportError:
+    from config import config
 
 logger = logging.getLogger(__name__)
 _GLOSSARY_CACHE: dict[str, object] = {"path": None, "mtime": None, "entries": []}

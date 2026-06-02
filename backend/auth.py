@@ -10,7 +10,10 @@ from typing import Optional
 from fastapi import HTTPException, Request, WebSocket
 from itsdangerous import BadSignature, TimestampSigner
 
-from config import config
+try:
+    from .config import config
+except ImportError:
+    from config import config
 
 
 def _read_signed_session_cookie(connection: Request | WebSocket) -> dict:

@@ -9,8 +9,12 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from auth import require_authenticated_request
-from models.database import get_all_meetings, get_meeting, get_meeting_segments, delete_meeting
+try:
+    from ..auth import require_authenticated_request
+    from ..models.database import get_all_meetings, get_meeting, get_meeting_segments, delete_meeting
+except ImportError:
+    from auth import require_authenticated_request
+    from models.database import get_all_meetings, get_meeting, get_meeting_segments, delete_meeting
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])

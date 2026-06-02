@@ -24,7 +24,10 @@ from typing import Optional
 
 import httpx
 
-from config import config
+try:
+    from ..config import config
+except ImportError:
+    from config import config
 
 logger = logging.getLogger(__name__)
 

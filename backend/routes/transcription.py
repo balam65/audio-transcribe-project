@@ -22,26 +22,48 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Up
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from auth import require_authenticated_request, require_authenticated_websocket
-from config import config
-from services.audio_capture import (
-    list_audio_devices,
-    find_monitor_device,
-    find_default_mic,
-    CombinedAudioCapture,
-    LocalAudioRecorder,
-    get_audio_debug_snapshot,
-)
-from services.transcription import TranscriptionService, TranscriptSegment
-from services.speaker_detect import SpeakerDetector
-from services.post_process import (
-    clean_transcript_text,
-    build_full_transcript,
-    count_unclear_segments,
-    get_word_count,
-)
-from services.summary import generate_summary
-from models.database import create_meeting, add_segment, end_meeting
+try:
+    from ..auth import require_authenticated_request, require_authenticated_websocket
+    from ..config import config
+    from ..services.audio_capture import (
+        list_audio_devices,
+        find_monitor_device,
+        find_default_mic,
+        CombinedAudioCapture,
+        LocalAudioRecorder,
+        get_audio_debug_snapshot,
+    )
+    from ..services.transcription import TranscriptionService, TranscriptSegment
+    from ..services.speaker_detect import SpeakerDetector
+    from ..services.post_process import (
+        clean_transcript_text,
+        build_full_transcript,
+        count_unclear_segments,
+        get_word_count,
+    )
+    from ..services.summary import generate_summary
+    from ..models.database import create_meeting, add_segment, end_meeting
+except ImportError:
+    from auth import require_authenticated_request, require_authenticated_websocket
+    from config import config
+    from services.audio_capture import (
+        list_audio_devices,
+        find_monitor_device,
+        find_default_mic,
+        CombinedAudioCapture,
+        LocalAudioRecorder,
+        get_audio_debug_snapshot,
+    )
+    from services.transcription import TranscriptionService, TranscriptSegment
+    from services.speaker_detect import SpeakerDetector
+    from services.post_process import (
+        clean_transcript_text,
+        build_full_transcript,
+        count_unclear_segments,
+        get_word_count,
+    )
+    from services.summary import generate_summary
+    from models.database import create_meeting, add_segment, end_meeting
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/transcription", tags=["transcription"])
