@@ -2081,8 +2081,12 @@ const App = {
       return;
     }
     if (source) source.value = transcript;
+    this.updateSummarizerSourceHint();
     this.setSummarizerLoadedNotice('Current transcript loaded. Ask the chatbot what kind of summary you want.');
     this.showToast('Current transcript loaded into Text Summarizer', 'success');
+    // Auto-collapse config so chat area is maximized
+    const collapse = document.getElementById('summarizer-config-collapse');
+    if (collapse) collapse.removeAttribute('open');
   },
 
   async loadSummarizerFile(event) {
@@ -2101,8 +2105,11 @@ const App = {
       const text = await file.text();
       const source = document.getElementById('summarizer-source-text');
       if (source) source.value = text;
+      this.updateSummarizerSourceHint();
       this.setSummarizerLoadedNotice(`${file.name} loaded. Ask the chatbot to summarize, extract actions, or create a report.`);
       this.showToast('File loaded into Text Summarizer', 'success');
+      const collapse = document.getElementById('summarizer-config-collapse');
+      if (collapse) collapse.removeAttribute('open');
     } catch (error) {
       this.showToast('Could not read that file as text', 'error');
     } finally {
@@ -2192,8 +2199,11 @@ const App = {
 
       if (source) source.value = transcript;
       if (panel) panel.classList.add('hidden');
+      this.updateSummarizerSourceHint();
       this.setSummarizerLoadedNotice(`${meeting.title || 'Recent transcript'} loaded. Ask the chatbot for a professional summary or actions.`);
       this.showToast('Recent transcript loaded into Text Summarizer', 'success');
+      const collapse = document.getElementById('summarizer-config-collapse');
+      if (collapse) collapse.removeAttribute('open');
     } catch (error) {
       this.showToast(error.message || 'Could not load recent transcript', 'error');
     }
@@ -2214,7 +2224,21 @@ const App = {
     if (instruction) instruction.value = '';
     this.summarizerMessages = [];
     document.getElementById('summarizer-recents-panel')?.classList.add('hidden');
+    this.updateSummarizerSourceHint();
     this.renderSummarizerMessages();
+  },
+
+  updateSummarizerSourceHint() {
+    const hint = document.getElementById('summarizer-source-hint');
+    const source = document.getElementById('summarizer-source-text');
+    if (!hint) return;
+    const text = source?.value?.trim() || '';
+    if (!text) {
+      hint.textContent = 'Click to expand';
+      return;
+    }
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    hint.textContent = `${wordCount.toLocaleString()} words loaded`;
   },
 
   getLatestSummarizerAnswer() {
@@ -2256,7 +2280,7 @@ const App = {
     const mode = document.getElementById('summarizer-mode');
     const modeValue = mode?.value || 'professional';
     const text = source?.value.trim() || '';
-    const userInstruction = instruction?.value.trim() || this.getSummarizerDefaultInstruction(modeValue);
+    const userInstruction = (instruction?.value || '').trim() || this.getSummarizerDefaultInstruction(modeValue);
 
     if (!text) {
       this.showToast('Paste text or use the current transcript first', 'error');
@@ -2292,6 +2316,9 @@ const App = {
       if (instruction) instruction.value = '';
       this.renderSummarizerMessages();
       this.showToast('Summary ready', 'success');
+      // Auto-collapse config so the full summary is visible
+      const collapse = document.getElementById('summarizer-config-collapse');
+      if (collapse) collapse.removeAttribute('open');
     } catch (error) {
       this.summarizerMessages.push({
         role: 'assistant',

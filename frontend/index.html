@@ -358,23 +358,30 @@
       </div>
     </div>
 
-    <div class="summarizer-source">
-      <label for="summarizer-source-text">Source text</label>
-      <textarea id="summarizer-source-text" placeholder="Paste any transcript, notes, email, report, or business text here."></textarea>
-    </div>
-
-    <div class="summarizer-controls">
-      <label for="summarizer-mode">Summary style</label>
-      <select id="summarizer-mode" class="device-select">
-        <option value="professional">Professional summary</option>
-        <option value="executive">Executive brief</option>
-        <option value="meeting">Meeting minutes</option>
-        <option value="actions">Actions and decisions</option>
-        <option value="todo">To-do tasks</option>
-        <option value="report">Client-ready report</option>
-        <option value="ask">Ask about this text</option>
-      </select>
-    </div>
+    <details class="summarizer-config-collapse" id="summarizer-config-collapse">
+      <summary class="summarizer-config-toggle">
+        <span class="summarizer-config-toggle-label">Source text &amp; style</span>
+        <span class="summarizer-config-toggle-hint" id="summarizer-source-hint">Click to expand</span>
+      </summary>
+      <div class="summarizer-config-body">
+        <div class="summarizer-source">
+          <label for="summarizer-source-text">Source text</label>
+          <textarea id="summarizer-source-text" placeholder="Paste any transcript, notes, email, report, or business text here."></textarea>
+        </div>
+        <div class="summarizer-controls">
+          <label for="summarizer-mode">Summary style</label>
+          <select id="summarizer-mode" class="device-select">
+            <option value="professional">Professional summary</option>
+            <option value="executive">Executive brief</option>
+            <option value="meeting">Meeting minutes</option>
+            <option value="actions">Actions and decisions</option>
+            <option value="todo">To-do tasks</option>
+            <option value="report">Client-ready report</option>
+            <option value="ask">Ask about this text</option>
+          </select>
+        </div>
+      </div>
+    </details>
 
     <div class="summarizer-chat" id="summarizer-chat">
       <div class="summarizer-empty">
@@ -384,7 +391,6 @@
     </div>
 
     <form class="summarizer-form" id="summarizer-form">
-      <textarea id="summarizer-instruction" placeholder="Example: Create an executive summary with decisions, action items, risks, and next steps."></textarea>
       <button class="btn btn-primary" id="btn-run-summarizer" type="submit">Summarize</button>
     </form>
   </aside>
