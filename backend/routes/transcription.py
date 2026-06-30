@@ -797,6 +797,10 @@ async def transcribe_audio_file(
         transcript = build_full_transcript(cleaned_segments)
         word_count = get_word_count(cleaned_segments)
         unclear_count = count_unclear_segments(cleaned_segments)
+        audio_duration_seconds = max(
+            (float(segment.get("end_time", 0.0) or 0.0) for segment in cleaned_segments),
+            default=0.0,
+        )
         summary_data = generate_summary(transcript, meeting_title)
 
         await end_meeting(
@@ -811,6 +815,7 @@ async def transcribe_audio_file(
             speaker_count=max(1, speaker_detector.speaker_count),
             word_count=word_count,
             unclear_count=unclear_count,
+            duration_seconds=audio_duration_seconds,
         )
 
         return {
@@ -823,6 +828,7 @@ async def transcribe_audio_file(
                 "unclear_count": unclear_count,
                 "speaker_count": max(1, speaker_detector.speaker_count),
                 "segment_count": len(cleaned_segments),
+                "duration_seconds": audio_duration_seconds,
             },
         }
     except Exception as e:

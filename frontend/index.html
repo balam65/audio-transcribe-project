@@ -87,6 +87,7 @@
           <div class="health-pill connection-indicator"><span class="connection-dot" id="connection-dot"></span><span id="connection-text">Connecting…</span></div>
           <span class="status-badge" id="badge-transcription-provider">Checking transcription</span>
           <span class="status-badge" id="badge-summary-provider">Checking summary</span>
+          <button class="btn btn-ghost btn-icon btn-summarizer-launch" id="btn-open-summarizer" type="button">Text Summarizer</button>
           <button class="btn btn-ghost btn-icon" id="btn-logout" type="button">Logout</button>
         </div>
       </header>
@@ -215,15 +216,6 @@
                   <button class="btn btn-export" data-export="transcript-pdf" type="button">PDF</button>
                 </div>
               </div>
-              <div class="export-group">
-                <div class="export-group-header"><span>Summary</span><small>TXT · MD · DOCX · PDF</small></div>
-                <div class="export-grid">
-                  <button class="btn btn-export" data-export="summary-txt" type="button">TXT</button>
-                  <button class="btn btn-export" data-export="summary-md" type="button">MD</button>
-                  <button class="btn btn-export" data-export="summary-docx" type="button">DOCX</button>
-                  <button class="btn btn-export" data-export="summary-pdf" type="button">PDF</button>
-                </div>
-              </div>
             </div>
           </section>
         </aside>
@@ -248,6 +240,8 @@
                   <button class="btn btn-ghost btn-inline" id="btn-pause" type="button" title="Pause is not yet supported">Pause</button>
                   <button class="btn btn-danger btn-inline" id="btn-stop-inline" type="button">Stop</button>
                   <button class="btn btn-ghost btn-inline" id="btn-copy-transcript" type="button">Copy</button>
+                  <button class="btn btn-ghost btn-inline" data-export="transcript-txt" type="button">Download TXT</button>
+                  <button class="btn btn-ghost btn-inline" data-export="transcript-pdf" type="button">Download PDF</button>
                   <button class="btn btn-ghost btn-inline" id="btn-clear-transcript" type="button">Clear</button>
                   <details class="shortcut-popover">
                     <summary>Shortcuts</summary>
@@ -292,33 +286,6 @@
             </div>
           </section>
 
-          <!-- Summary Panel -->
-          <section class="studio-card summary-panel" id="summary-panel">
-            <div class="card-header">
-              <div>
-                <p class="panel-kicker">Summary Studio</p>
-                <h2>Meeting Summary</h2>
-              </div>
-              <div class="summary-metrics">
-                <span class="summary-metric">Words <strong id="final-words">0</strong></span>
-                <span class="summary-metric">Speakers <strong id="final-speakers">0</strong></span>
-                <span class="summary-metric">Unclear <strong id="final-unclear">0</strong></span>
-              </div>
-            </div>
-            <div class="summary-placeholder" id="summary-placeholder">
-              <div class="summary-placeholder-icon">✦</div>
-              <h3 id="summary-placeholder-title">Summary ready when the transcript is complete</h3>
-              <p id="summary-placeholder-text">Stop a live session or finish an uploaded file to generate key points, action items, decisions, and follow-ups.</p>
-              <div class="summary-loading-dots hidden" id="summary-loading-dots"><span></span><span></span><span></span></div>
-            </div>
-            <div class="summary-content hidden" id="summary-content">
-              <section class="summary-tile summary-tile-wide"><h3>Summary</h3><div class="summary-note hidden" id="summary-note"></div><p class="summary-text" id="summary-text">Generating summary…</p></section>
-              <section class="summary-tile"><h3>Key Points</h3><ul class="summary-list" id="summary-key-points"></ul></section>
-              <section class="summary-tile"><h3>Decisions</h3><ul class="summary-list" id="summary-decisions"></ul></section>
-              <section class="summary-tile"><h3>Action Items</h3><div class="summary-actions" id="summary-actions"></div></section>
-              <section class="summary-tile"><h3>Follow-ups</h3><ul class="summary-list" id="summary-questions"></ul></section>
-            </div>
-          </section>
         </main>
 
         <!-- RIGHT: Past Meetings + Audio Diagnostics (collapsed) -->
@@ -358,6 +325,69 @@
       </div>
     </div>
   </div>
+
+  <div class="summarizer-backdrop hidden" id="summarizer-backdrop"></div>
+  <aside class="summarizer-drawer hidden" id="summarizer-drawer" aria-label="Text Summarizer">
+    <div class="summarizer-resize-handle" id="summarizer-resize-handle" title="Drag to resize"></div>
+    <div class="summarizer-head">
+      <div>
+        <p class="panel-kicker">Text Summarizer</p>
+        <h2>Professional Summary AI</h2>
+        <span class="summarizer-model" id="summarizer-model-label">Checking model</span>
+      </div>
+      <button class="btn btn-ghost btn-icon" id="btn-close-summarizer" type="button">Close</button>
+    </div>
+
+    <div class="summarizer-toolbar">
+      <button class="btn btn-secondary btn-inline" id="btn-summarizer-use-transcript" type="button">Use current transcript</button>
+      <label class="btn btn-ghost btn-inline summarizer-file-button" for="summarizer-file-input">Upload file</label>
+      <input class="hidden" type="file" id="summarizer-file-input" accept=".txt,.md,.csv,.json,.log,text/*">
+      <button class="btn btn-ghost btn-inline" id="btn-summarizer-recents" type="button">Recents</button>
+      <button class="btn btn-ghost btn-inline" id="btn-download-summarizer-txt" type="button">Download TXT</button>
+      <button class="btn btn-ghost btn-inline" id="btn-download-summarizer-md" type="button">Download MD</button>
+      <button class="btn btn-ghost btn-inline" id="btn-summarizer-clear" type="button">Clear</button>
+    </div>
+
+    <div class="summarizer-recents hidden" id="summarizer-recents-panel">
+      <div class="summarizer-recents-head">
+        <strong>Recent transcripts</strong>
+        <span id="summarizer-recents-count">0 files</span>
+      </div>
+      <div class="summarizer-recents-list" id="summarizer-recents-list">
+        <div class="summarizer-recents-empty">No recent transcripts yet.</div>
+      </div>
+    </div>
+
+    <div class="summarizer-source">
+      <label for="summarizer-source-text">Source text</label>
+      <textarea id="summarizer-source-text" placeholder="Paste any transcript, notes, email, report, or business text here."></textarea>
+    </div>
+
+    <div class="summarizer-controls">
+      <label for="summarizer-mode">Summary style</label>
+      <select id="summarizer-mode" class="device-select">
+        <option value="professional">Professional summary</option>
+        <option value="executive">Executive brief</option>
+        <option value="meeting">Meeting minutes</option>
+        <option value="actions">Actions and decisions</option>
+        <option value="todo">To-do tasks</option>
+        <option value="report">Client-ready report</option>
+        <option value="ask">Ask about this text</option>
+      </select>
+    </div>
+
+    <div class="summarizer-chat" id="summarizer-chat">
+      <div class="summarizer-empty">
+        <strong>Ready to summarize.</strong>
+        <p>Use the current transcript or paste any text, then ask for the structure you want.</p>
+      </div>
+    </div>
+
+    <form class="summarizer-form" id="summarizer-form">
+      <textarea id="summarizer-instruction" placeholder="Example: Create an executive summary with decisions, action items, risks, and next steps."></textarea>
+      <button class="btn btn-primary" id="btn-run-summarizer" type="submit">Summarize</button>
+    </form>
+  </aside>
 
   <!-- Hidden hero elements referenced by JS (kept for compatibility) -->
   <div style="display:none">

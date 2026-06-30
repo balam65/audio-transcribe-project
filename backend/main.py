@@ -23,6 +23,7 @@ try:
     from .routes.transcription import router as transcription_router
     from .routes.meetings import router as meetings_router
     from .routes.export import router as export_router
+    from .routes.text_summarizer import router as text_summarizer_router
     from .services.summary import get_summary_provider_status
     from .services.transcription import get_transcription_provider_status
 except ImportError:
@@ -32,6 +33,7 @@ except ImportError:
     from routes.transcription import router as transcription_router
     from routes.meetings import router as meetings_router
     from routes.export import router as export_router
+    from routes.text_summarizer import router as text_summarizer_router
     from services.summary import get_summary_provider_status
     from services.transcription import get_transcription_provider_status
 
@@ -90,6 +92,7 @@ app.include_router(auth_router)
 app.include_router(transcription_router)
 app.include_router(meetings_router)
 app.include_router(export_router)
+app.include_router(text_summarizer_router)
 
 # Serve frontend static files
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -133,6 +136,8 @@ async def health():
         "summary_ready": summary_status["ready"],
         "summary_detail": summary_status["detail"],
         "summary_model_available": summary_status["model_available"],
+        "text_summarizer_model": config.TEXT_SUMMARIZER_MODEL,
+        "text_summarizer_ready": bool(config.OPENAI_API_KEY),
         "ollama_reachable": summary_status["reachable"] if config.SUMMARY_ENGINE == "ollama" else False,
         "openai_configured": summary_status["ready"] if config.SUMMARY_ENGINE == "openai" else False,
     }

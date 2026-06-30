@@ -161,6 +161,7 @@ async def end_meeting(
     language_detected: str = "",
     word_count: int = 0,
     unclear_count: int = 0,
+    duration_seconds: Optional[float] = None,
 ) -> dict:
     """Update meeting record when transcription ends."""
     now = datetime.utcnow().isoformat()
@@ -171,7 +172,9 @@ async def end_meeting(
         row = await db.execute_fetchall(
             "SELECT created_at FROM meetings WHERE id = ?", (meeting_id,)
         )
-        if row:
+        if duration_seconds is not None:
+            duration = max(float(duration_seconds), 0.0)
+        elif row:
             created = datetime.fromisoformat(row[0][0])
             ended = datetime.fromisoformat(now)
             duration = (ended - created).total_seconds()

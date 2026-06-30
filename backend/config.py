@@ -117,6 +117,12 @@ class Config:
     # --- Summary Provider ---
     SUMMARY_ENGINE: str = os.getenv("SUMMARY_ENGINE", "openai").lower()
     SUMMARY_MODEL: str = os.getenv("SUMMARY_MODEL", "gpt-5.4-mini")
+    TEXT_SUMMARIZER_MODEL: str = os.getenv("TEXT_SUMMARIZER_MODEL", SUMMARY_MODEL)
+    TEXT_SUMMARIZER_REASONING_EFFORT: str = os.getenv(
+        "TEXT_SUMMARIZER_REASONING_EFFORT",
+        os.getenv("OPENAI_REASONING_EFFORT", "low"),
+    )
+    TEXT_SUMMARIZER_MAX_INPUT_CHARS: int = int(os.getenv("TEXT_SUMMARIZER_MAX_INPUT_CHARS", "180000"))
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
