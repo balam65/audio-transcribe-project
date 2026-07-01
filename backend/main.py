@@ -14,14 +14,28 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
-from config import config
-from models.database import init_db
-from routes.transcription import router as transcription_router
-from routes.meetings import router as meetings_router
-from routes.export import router as export_router
-from services.summary import get_summary_provider_status
-from services.transcription import get_transcription_provider_status
+try:
+    from .config import config
+    from .models.database import init_db
+    from .routes.auth import router as auth_router
+    from .routes.transcription import router as transcription_router
+    from .routes.meetings import router as meetings_router
+    from .routes.export import router as export_router
+    from .routes.text_summarizer import router as text_summarizer_router
+    from .services.summary import get_summary_provider_status
+    from .services.transcription import get_transcription_provider_status
+except ImportError:
+    from config import config
+    from models.database import init_db
+    from routes.auth import router as auth_router
+    from routes.transcription import router as transcription_router
+    from routes.meetings import router as meetings_router
+    from routes.export import router as export_router
+    from routes.text_summarizer import router as text_summarizer_router
+    from services.summary import get_summary_provider_status
+    from services.transcription import get_transcription_provider_status
 
 # Configure logging
 logging.basicConfig(
@@ -55,6 +69,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+if config.SESSION_SECRET:
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=config.SESSION_SECRET,
+        same_site="lax",
+        https_only=config.hosted_mode(),
+        max_age=60 * 60 * 24 * 14,
+    )
+
 # CORS middleware (allow frontend on same machine)
 app.add_middleware(
     CORSMiddleware,
@@ -65,9 +88,11 @@ app.add_middleware(
 )
 
 # Include API routers
+app.include_router(auth_router)
 app.include_router(transcription_router)
 app.include_router(meetings_router)
 app.include_router(export_router)
+app.include_router(text_summarizer_router)
 
 # Serve frontend static files
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -94,6 +119,10 @@ async def health():
     summary_status = get_summary_provider_status()
     return {
         "status": "ok",
+        "app_mode": config.APP_MODE,
+        "auth_required": config.AUTH_REQUIRED,
+        "auth_configured": config.auth_configured(),
+        "capabilities": config.capabilities(),
         "engine": config.TRANSCRIPTION_ENGINE,
         "transcription_engine": config.TRANSCRIPTION_ENGINE,
         "transcription_model": transcription_status["model"],
@@ -107,6 +136,8 @@ async def health():
         "summary_ready": summary_status["ready"],
         "summary_detail": summary_status["detail"],
         "summary_model_available": summary_status["model_available"],
+        "text_summarizer_model": config.TEXT_SUMMARIZER_MODEL,
+        "text_summarizer_ready": bool(config.OPENAI_API_KEY),
         "ollama_reachable": summary_status["reachable"] if config.SUMMARY_ENGINE == "ollama" else False,
         "openai_configured": summary_status["ready"] if config.SUMMARY_ENGINE == "openai" else False,
     }

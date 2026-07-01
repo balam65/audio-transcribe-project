@@ -25,7 +25,10 @@ from typing import Optional
 import httpx
 import numpy as np
 
-from config import config
+try:
+    from ..config import config
+except ImportError:
+    from config import config
 
 logger = logging.getLogger(__name__)
 _GLOSSARY_CACHE: dict[str, object] = {"path": None, "mtime": None, "entries": []}
@@ -158,10 +161,21 @@ HALLUCINATION_PHRASES = frozenset(
     ]
 )
 
+PROVIDER_PROMPT_ARTIFACT_PATTERNS = (
+    r"there may be provided context on the content of the audio or conversation\.?",
+    r"use this only as weak contextual guidance\.?",
+    r"the audio itself is authoritative\.?",
+)
+
 # Regex patterns that catch repetitive hallucination (e.g. "I'm going to I'm going to I'm going to")
 _REPETITION_RE = re.compile(
     r"^(.{2,30})\s*(?:\1\s*){2,}$",
     re.IGNORECASE | re.DOTALL,
+)
+
+_PROVIDER_PROMPT_ARTIFACT_RE = re.compile(
+    r"\s*(?:" + "|".join(PROVIDER_PROMPT_ARTIFACT_PATTERNS) + r")\s*",
+    re.IGNORECASE,
 )
 
 TRANSCRIPT_POLISH_SYSTEM_PROMPT = """You are cleaning a raw meeting transcript for readability.
@@ -330,7 +344,7 @@ def _alias_pattern(alias: str) -> str:
 def _apply_glossary_corrections(text: str) -> str:
     """Replace known alias spellings with canonical glossary terms."""
 
-    corrected = str(text or "").strip()
+    corrected = _strip_provider_prompt_artifacts(str(text or ""))
     if not corrected:
         return corrected
 
@@ -346,6 +360,16 @@ def _apply_glossary_corrections(text: str) -> str:
             corrected = pattern.sub(canonical, corrected)
 
     return re.sub(r"\s+", " ", corrected).strip()
+
+
+def _strip_provider_prompt_artifacts(text: str) -> str:
+    """Remove provider prompt/instruction snippets that occasionally leak into STT output."""
+
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    cleaned = _PROVIDER_PROMPT_ARTIFACT_RE.sub(" ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def _get_transcription_provider_status(engine: str) -> dict:
@@ -469,11 +493,16 @@ def _split_transcript_into_readable_chunks(text: str) -> list[str]:
     sentences = re.split(r"(?<=[.!?])\s+", cleaned)
     chunks: list[str] = []
     current = ""
+    previous_sentence_norm = ""
 
     for sentence in sentences:
         sentence = sentence.strip()
         if not sentence:
             continue
+        sentence_norm = " ".join(_normalized_overlap_tokens(sentence))
+        if sentence_norm and sentence_norm == previous_sentence_norm:
+            continue
+        previous_sentence_norm = sentence_norm
 
         candidate = f"{current} {sentence}".strip() if current else sentence
         if current and (len(candidate) > 280 or candidate.count(". ") >= 4):
@@ -1407,6 +1436,12 @@ class OpenAITranscriptionEngine(BaseTranscriptionEngine):
                     re.sub(r"\s+", " ", str(segment or "")).strip()
                 )
                 if normalized and not _is_hallucination_text(normalized):
+                    if (
+                        cleaned_segments
+                        and " ".join(_normalized_overlap_tokens(normalized))
+                        == " ".join(_normalized_overlap_tokens(cleaned_segments[-1]))
+                    ):
+                        continue
                     cleaned_segments.append(normalized)
 
             return cleaned_segments or None

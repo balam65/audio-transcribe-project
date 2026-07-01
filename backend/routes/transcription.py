@@ -18,29 +18,52 @@ from typing import Optional
 from urllib.parse import quote
 
 import numpy as np
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from config import config
-from services.audio_capture import (
-    list_audio_devices,
-    find_monitor_device,
-    find_default_mic,
-    CombinedAudioCapture,
-    LocalAudioRecorder,
-    get_audio_debug_snapshot,
-)
-from services.transcription import TranscriptionService, TranscriptSegment
-from services.speaker_detect import SpeakerDetector
-from services.post_process import (
-    clean_transcript_text,
-    build_full_transcript,
-    count_unclear_segments,
-    get_word_count,
-)
-from services.summary import generate_summary
-from models.database import create_meeting, add_segment, end_meeting
+try:
+    from ..auth import require_authenticated_request, require_authenticated_websocket
+    from ..config import config
+    from ..services.audio_capture import (
+        list_audio_devices,
+        find_monitor_device,
+        find_default_mic,
+        CombinedAudioCapture,
+        LocalAudioRecorder,
+        get_audio_debug_snapshot,
+    )
+    from ..services.transcription import TranscriptionService, TranscriptSegment
+    from ..services.speaker_detect import SpeakerDetector
+    from ..services.post_process import (
+        clean_transcript_text,
+        build_full_transcript,
+        count_unclear_segments,
+        get_word_count,
+    )
+    from ..services.summary import generate_summary
+    from ..models.database import create_meeting, add_segment, end_meeting
+except ImportError:
+    from auth import require_authenticated_request, require_authenticated_websocket
+    from config import config
+    from services.audio_capture import (
+        list_audio_devices,
+        find_monitor_device,
+        find_default_mic,
+        CombinedAudioCapture,
+        LocalAudioRecorder,
+        get_audio_debug_snapshot,
+    )
+    from services.transcription import TranscriptionService, TranscriptSegment
+    from services.speaker_detect import SpeakerDetector
+    from services.post_process import (
+        clean_transcript_text,
+        build_full_transcript,
+        count_unclear_segments,
+        get_word_count,
+    )
+    from services.summary import generate_summary
+    from models.database import create_meeting, add_segment, end_meeting
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/transcription", tags=["transcription"])
@@ -49,6 +72,26 @@ router = APIRouter(prefix="/api/transcription", tags=["transcription"])
 _active_session = None
 _active_local_recording: Optional[LocalAudioRecorder] = None
 _local_recording_files: dict[str, str] = {}
+
+
+def _hosted_mode_message() -> str:
+    """Explain why local-audio features are unavailable in hosted deployments."""
+    return (
+        "This feature is only available in desktop mode. "
+        "Hosted deployments support uploaded-file transcription, not server-side local audio capture."
+    )
+
+
+def _require_live_capture_available() -> None:
+    """Require desktop mode for live capture routes."""
+    if not config.live_capture_enabled():
+        raise HTTPException(status_code=403, detail=_hosted_mode_message())
+
+
+def _require_local_recording_available() -> None:
+    """Require desktop mode for local-recording routes."""
+    if not config.local_recording_enabled():
+        raise HTTPException(status_code=403, detail=_hosted_mode_message())
 
 
 class TranscriptionSession:
@@ -517,8 +560,10 @@ def _serialize_local_recording_file(path: Path) -> dict:
 
 
 @router.get("/devices")
-async def get_audio_devices():
+async def get_audio_devices(request: Request):
     """List available audio input devices."""
+    require_authenticated_request(request)
+    _require_live_capture_available()
     devices = list_audio_devices()
     monitor = find_monitor_device()
     mic = find_default_mic()
@@ -534,8 +579,9 @@ async def get_audio_devices():
 
 
 @router.get("/status")
-async def get_status():
+async def get_status(request: Request):
     """Get current transcription session status."""
+    require_authenticated_request(request)
     global _active_session
     if _active_session and _active_session.is_running:
         return {
@@ -548,8 +594,10 @@ async def get_status():
 
 
 @router.get("/audio-debug")
-async def get_audio_debug():
+async def get_audio_debug(request: Request):
     """Return current audio routing details for UI diagnostics."""
+    require_authenticated_request(request)
+    _require_live_capture_available()
     global _active_session
     if _active_session and _active_session.is_running:
         snapshot = _active_session.audio_capture.get_debug_snapshot()
@@ -566,8 +614,10 @@ async def get_audio_debug():
 
 
 @router.get("/local-recording/files")
-async def list_local_recording_files():
+async def list_local_recording_files(request: Request):
     """List completed local recordings saved in the backend directory."""
+    require_authenticated_request(request)
+    _require_local_recording_available()
     active_file_path = None
     if _active_local_recording and _active_local_recording.is_running:
         active_file_path = _active_local_recording.file_path.resolve()
@@ -588,8 +638,10 @@ async def list_local_recording_files():
 
 
 @router.post("/local-recording/start")
-async def start_local_recording(request: LocalRecordingStartRequest):
+async def start_local_recording(request: LocalRecordingStartRequest, http_request: Request):
     """Start recording system audio locally in the backend."""
+    require_authenticated_request(http_request)
+    _require_local_recording_available()
     global _active_local_recording
 
     if _active_session and _active_session.is_running:
@@ -631,8 +683,10 @@ async def start_local_recording(request: LocalRecordingStartRequest):
 
 
 @router.post("/local-recording/stop")
-async def stop_local_recording():
+async def stop_local_recording(request: Request):
     """Stop the active local recording and return its download metadata."""
+    require_authenticated_request(request)
+    _require_local_recording_available()
     global _active_local_recording, _local_recording_files
 
     if not _active_local_recording or not _active_local_recording.is_running:
@@ -660,8 +714,10 @@ async def stop_local_recording():
 
 
 @router.get("/local-recording/download/{recording_id}")
-async def download_local_recording(recording_id: str):
+async def download_local_recording(recording_id: str, request: Request):
     """Download a saved local recording."""
+    require_authenticated_request(request)
+    _require_local_recording_available()
     file_path = _local_recording_files.get(recording_id)
     path = Path(file_path) if file_path else _resolve_local_recording_path(recording_id)
     if not path or not path.exists():
@@ -675,8 +731,10 @@ async def download_local_recording(recording_id: str):
 
 
 @router.get("/local-recording/files/{file_name}")
-async def download_saved_local_recording(file_name: str):
+async def download_saved_local_recording(file_name: str, request: Request):
     """Download a saved local recording directly from disk."""
+    require_authenticated_request(request)
+    _require_local_recording_available()
     path = _resolve_local_recording_path(file_name)
     if not path:
         raise HTTPException(status_code=404, detail="Recording file is missing.")
@@ -688,12 +746,31 @@ async def download_saved_local_recording(file_name: str):
     )
 
 
+@router.delete("/local-recording/files/{file_name}")
+async def delete_saved_local_recording(file_name: str, request: Request):
+    """Delete a saved local recording from disk."""
+    require_authenticated_request(request)
+    _require_local_recording_available()
+    path = _resolve_local_recording_path(file_name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Recording file is missing.")
+    
+    try:
+        path.unlink()
+        return {"success": True, "message": "Recording deleted"}
+    except Exception as e:
+        logger.error(f"Failed to delete recording {file_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete recording: {e}")
+
+
 @router.post("/file")
 async def transcribe_audio_file(
+    request: Request,
     file: UploadFile = File(...),
     title: str = Form("Uploaded Audio"),
 ):
     """Transcribe an uploaded audio file and save it as a meeting."""
+    require_authenticated_request(request)
     suffix = os.path.splitext(file.filename or "")[1] or ".wav"
     temp_path = None
 
@@ -737,6 +814,10 @@ async def transcribe_audio_file(
         transcript = build_full_transcript(cleaned_segments)
         word_count = get_word_count(cleaned_segments)
         unclear_count = count_unclear_segments(cleaned_segments)
+        audio_duration_seconds = max(
+            (float(segment.get("end_time", 0.0) or 0.0) for segment in cleaned_segments),
+            default=0.0,
+        )
         summary_data = generate_summary(transcript, meeting_title)
 
         await end_meeting(
@@ -751,6 +832,7 @@ async def transcribe_audio_file(
             speaker_count=max(1, speaker_detector.speaker_count),
             word_count=word_count,
             unclear_count=unclear_count,
+            duration_seconds=audio_duration_seconds,
         )
 
         return {
@@ -763,6 +845,7 @@ async def transcribe_audio_file(
                 "unclear_count": unclear_count,
                 "speaker_count": max(1, speaker_detector.speaker_count),
                 "segment_count": len(cleaned_segments),
+                "duration_seconds": audio_duration_seconds,
             },
         }
     except Exception as e:
@@ -794,6 +877,8 @@ async def transcription_websocket(websocket: WebSocket):
     - {"type": "error", "message": "..."}  — errors
     """
     global _active_session
+    if not await require_authenticated_websocket(websocket):
+        return
     await websocket.accept()
 
     try:
@@ -802,6 +887,12 @@ async def transcription_websocket(websocket: WebSocket):
             action = data.get("action", "")
 
             if action == "start":
+                if not config.live_capture_enabled():
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": _hosted_mode_message(),
+                    })
+                    continue
                 if _active_session and _active_session.is_running:
                     await websocket.send_json({
                         "type": "error",

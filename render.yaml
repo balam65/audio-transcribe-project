@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: meeting-transcriber
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: APP_MODE
+        value: hosted
+      - key: AUTH_REQUIRED
+        value: "true"
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "10000"
+      - key: TRANSCRIBE_ENGINE
+        value: openai
+      - key: SUMMARY_ENGINE
+        value: openai
+      - key: OPENAI_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: OPENAI_TRANSCRIPTION_MODEL
+        value: openai/gpt-4o-transcribe
+      - key: SUMMARY_MODEL
+        value: openai/gpt-4o-mini
+      - key: DATABASE_PATH
+        value: data/meetings.db
+      - key: EXPORT_DIR
+        value: data/exports
+      - key: LOCAL_RECORDING_DIR
+        value: data/local_recordings
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: AUTH_USERNAME
+        sync: false
+      - key: AUTH_PASSWORD
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: OPENAI_PROJECT
+        sync: false

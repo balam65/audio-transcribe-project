@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+venv
+__pycache__
+*.pyc
+.ngrok.log
+.ngrok.pid
+data/meetings.db
+data/exports
+data/local_recordings
+*.png
+*.md
+!README.md

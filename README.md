@@ -32,6 +32,11 @@ sudo apt install ffmpeg portaudio19-dev pulseaudio-utils
 ```bash
 python3 -m venv venv
 source venv/bin/activate
+pip install -r backend/requirements-local.txt
+```
+
+For hosted/upload-only deployments where local audio capture is not needed:
+```bash
 pip install -r backend/requirements.txt
 ```
 
@@ -62,6 +67,71 @@ cd backend && python main.py
 ### 5. Open the UI
 Navigate to **http://localhost:8000**
 
+### 6. Create a public share link
+If the backend is already running on port `8000`, you can expose it temporarily with:
+```bash
+./scripts/share-public.sh
+```
+
+This prints an `https://...ngrok-free.app` URL you can share.
+
+Important:
+- The link is temporary and changes when you restart the tunnel.
+- Live meeting capture still uses the audio devices on the server machine.
+- Uploaded-file transcription works well for remote users over the public link.
+
+## 🌍 Hosted Deployment
+
+This repo now supports a proper hosted mode for public deployment:
+
+- **Server-side auth** protects API routes and WebSocket access with signed sessions
+- **Hosted mode** disables Linux-only local audio capture features that do not work from a cloud server
+- **Uploaded-file transcription** remains available for shared/public use
+- **Free Render option** is available, with ephemeral storage tradeoffs
+
+### Render deployment
+
+Files included for deployment:
+
+- `Dockerfile`
+- `render.yaml`
+- `.dockerignore`
+
+Recommended environment values for hosted mode:
+
+```bash
+APP_MODE=hosted
+AUTH_REQUIRED=true
+AUTH_USERNAME=your-admin-name
+AUTH_PASSWORD=your-strong-password
+SESSION_SECRET=generate-a-random-secret
+OPENAI_API_KEY=your-provider-key
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+```
+
+### Free Render mode
+
+The included `render.yaml` is set up for a free Render web service.
+
+Tradeoffs in the free setup:
+
+- the service can sleep after inactivity
+- local files are ephemeral
+- SQLite meeting history and export files can disappear after restart or redeploy
+- uploaded-file transcription still works, but stored records are not durable
+- `PyAudio` is intentionally excluded from the hosted requirements because Render does not need local machine audio capture
+
+### Hosted-mode limitation
+
+Cloud hosting does **not** let each visitor capture their own Zoom/Meet/system audio through your server.
+
+In hosted mode, this app is designed for:
+
+- uploading audio/video meeting recordings
+- generating transcripts and summaries
+- reviewing meeting history
+- exporting transcript and summary files
+
 ## ⚙️ Environment Variables
 
 All settings in `.env` (copy from `.env.example`):
@@ -79,6 +149,12 @@ All settings in `.env` (copy from `.env.example`):
 | `WHISPER_TASK` | `translate` | `translate` (→ English) or `transcribe` (keep original) |
 | `WHISPER_DEVICE` | `auto` | `auto`, `cpu`, or `cuda` |
 | `WHISPER_COMPUTE_TYPE` | `auto` | `auto`, `float16`, `int8`, `int8_float16` |
+| `APP_MODE` | `desktop` | `desktop` for local capture, `hosted` for public deployment |
+| `AUTH_REQUIRED` | `false` locally / `true` in hosted mode | Enables backend session auth |
+| `AUTH_USERNAME` | `admin` | Username for hosted login |
+| `AUTH_PASSWORD` | empty | Password for hosted login |
+| `SESSION_SECRET` | empty | Secret used to sign session cookies |
+| `PUBLIC_BASE_URL` | empty | Optional canonical public URL |
 | `AUDIO_CHUNK_SECONDS` | `5` | Audio chunk duration |
 | `SUMMARY_ENGINE` | `openai` | Summary engine: `openai` or `ollama` |
 | `SUMMARY_MODEL` | `gpt-5.4-mini` | Summary model ID |
@@ -106,6 +182,14 @@ Model accuracy ranking: `large-v3` > `medium` > `small` > `base` > `tiny`
 7. Export transcript/summary in any format
 8. If `TRANSCRIBE_ENGINE=openai`, confirm `OPENAI_API_KEY` is set before testing live or uploaded transcription
 
+### Testing hosted mode locally
+```bash
+APP_MODE=hosted AUTH_REQUIRED=true AUTH_USERNAME=admin AUTH_PASSWORD=changeme SESSION_SECRET=test-secret \
+source venv/bin/activate && cd backend && python main.py
+```
+
+Then open `http://localhost:8000`, sign in, and test uploaded-file transcription.
+
 ### Testing System Audio Capture
 ```bash
 # List available audio sources
@@ -125,6 +209,7 @@ pactl list sources short
 6. **Best summaries** use your configured provider; if unavailable, the app falls back to a deterministic extractive summary
 7. **Overlapping speech** detection is limited with heuristic approach
 8. **No Windows/macOS** system audio capture (PulseAudio is Linux-only)
+9. **Hosted mode** is upload-first by design; live capture stays a desktop-only feature
 
 ## 📁 Project Structure
 

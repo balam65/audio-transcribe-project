@@ -40,6 +40,17 @@ def _auto_compute_type(device: str) -> str:
 class Config:
     """Central configuration class for configurable transcription and summaries."""
 
+    # --- App Mode / Authentication ---
+    APP_MODE: str = os.getenv("APP_MODE", "desktop").lower()
+    AUTH_REQUIRED: bool = os.getenv(
+        "AUTH_REQUIRED",
+        "true" if APP_MODE == "hosted" else "false",
+    ).lower() == "true"
+    AUTH_USERNAME: str = os.getenv("AUTH_USERNAME", "admin")
+    AUTH_PASSWORD: str = os.getenv("AUTH_PASSWORD", "")
+    SESSION_SECRET: str = os.getenv("SESSION_SECRET", "")
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "").strip()
+
     # --- Transcription Engine ---
     TRANSCRIPTION_ENGINE: str = os.getenv("TRANSCRIBE_ENGINE", "openai").lower()
 
@@ -106,6 +117,12 @@ class Config:
     # --- Summary Provider ---
     SUMMARY_ENGINE: str = os.getenv("SUMMARY_ENGINE", "openai").lower()
     SUMMARY_MODEL: str = os.getenv("SUMMARY_MODEL", "gpt-5.4-mini")
+    TEXT_SUMMARIZER_MODEL: str = os.getenv("TEXT_SUMMARIZER_MODEL", SUMMARY_MODEL)
+    TEXT_SUMMARIZER_REASONING_EFFORT: str = os.getenv(
+        "TEXT_SUMMARIZER_REASONING_EFFORT",
+        os.getenv("OPENAI_REASONING_EFFORT", "low"),
+    )
+    TEXT_SUMMARIZER_MAX_INPUT_CHARS: int = int(os.getenv("TEXT_SUMMARIZER_MAX_INPUT_CHARS", "180000"))
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -164,6 +181,7 @@ class Config:
         # --- Print config ---
         gpu_label = "🟢 GPU (CUDA)" if cls.WHISPER_DEVICE == "cuda" else "🔵 CPU"
         print(f"  🎧 Transcription engine: {cls.TRANSCRIPTION_ENGINE}")
+        print(f"  🏷️  App mode: {cls.APP_MODE}")
         if cls.TRANSCRIPTION_ENGINE == "openai":
             print(f"  🤖 OpenAI transcription model: {cls.OPENAI_TRANSCRIPTION_MODEL}")
         else:
@@ -173,6 +191,20 @@ class Config:
         print(f"  🧠 Summary: {cls.SUMMARY_ENGINE} ({cls.SUMMARY_MODEL})")
         print(f"  📊 Anti-hallucination: confidence≥{cls.CONFIDENCE_THRESHOLD}, "
               f"no_speech≤{cls.NO_SPEECH_THRESHOLD}")
+        print(
+            "  🔐 Auth: "
+            + (
+                f"enabled for `{cls.AUTH_USERNAME}`"
+                if cls.auth_configured()
+                else ("enabled but not configured" if cls.AUTH_REQUIRED else "disabled")
+            )
+        )
+        print(
+            "  🎛️  Capabilities: "
+            f"live_capture={'yes' if cls.live_capture_enabled() else 'no'}, "
+            f"local_recording={'yes' if cls.local_recording_enabled() else 'no'}, "
+            f"file_upload={'yes' if cls.file_upload_enabled() else 'no'}"
+        )
 
         if cls.TRANSCRIPTION_ENGINE == "openai":
             if cls.OPENAI_API_KEY:
@@ -214,7 +246,48 @@ class Config:
                 f"  ⚠️  Unsupported SUMMARY_ENGINE `{cls.SUMMARY_ENGINE}` — fallback summaries will be used"
             )
 
+        if cls.AUTH_REQUIRED and not cls.auth_configured():
+            print(
+                "  ⚠️  AUTH_REQUIRED is enabled, but AUTH_PASSWORD or SESSION_SECRET is missing"
+            )
+
         return True
+
+    @classmethod
+    def hosted_mode(cls) -> bool:
+        """Whether the app is running as a hosted/public deployment."""
+        return cls.APP_MODE == "hosted"
+
+    @classmethod
+    def live_capture_enabled(cls) -> bool:
+        """Live capture requires local audio access and is disabled in hosted mode."""
+        return not cls.hosted_mode()
+
+    @classmethod
+    def local_recording_enabled(cls) -> bool:
+        """Backend WAV recording also requires local audio access."""
+        return not cls.hosted_mode()
+
+    @classmethod
+    def file_upload_enabled(cls) -> bool:
+        """Uploaded-file transcription is safe in both desktop and hosted modes."""
+        return True
+
+    @classmethod
+    def auth_configured(cls) -> bool:
+        """Server-side auth requires both a password and a session secret."""
+        if not cls.AUTH_REQUIRED:
+            return True
+        return bool(cls.AUTH_USERNAME and cls.AUTH_PASSWORD and cls.SESSION_SECRET)
+
+    @classmethod
+    def capabilities(cls) -> dict:
+        """Expose frontend/backend capability flags in one place."""
+        return {
+            "live_capture": cls.live_capture_enabled(),
+            "local_recording": cls.local_recording_enabled(),
+            "file_upload": cls.file_upload_enabled(),
+        }
 
 
 config = Config()
