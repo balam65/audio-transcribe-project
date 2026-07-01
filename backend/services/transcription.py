@@ -8,6 +8,8 @@ Supports two transcription providers:
 The app keeps the same session and file-upload flow regardless of provider.
 """
 
+from __future__ import annotations
+
 import io
 import json
 import logging
