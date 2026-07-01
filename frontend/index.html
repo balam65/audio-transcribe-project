@@ -5,65 +5,209 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Desktop meeting transcription studio with configurable speech-to-text and summaries.">
   <title>Meeting Transcriber Studio</title>
-  <link rel="stylesheet" href="/css/styles.css">
-  <link rel="stylesheet" href="/css/beast-gate.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff7a59'/%3E%3Cstop offset='1' stop-color='%2353d7ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='%23091218'/%3E%3Cpath d='M20 42V24a12 12 0 1 1 24 0v18' stroke='url(%23g)' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M16 33a16 16 0 0 0 32 0' stroke='%23f6f8ff' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M32 49v5' stroke='%23f6f8ff' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
-  <style>@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@300;400;500;600;700&display=swap');</style>
+  <link rel="stylesheet" href="/css/styles.css?v=28">
+  <link rel="stylesheet" href="/css/premium.css?v=2">
+  <link rel="stylesheet" href="/css/beast-gate.css?v=6">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234f46e5'/%3E%3Cstop offset='1' stop-color='%230891b2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='%23f8fafc'/%3E%3Cpath d='M20 42V24a12 12 0 1 1 24 0v18' stroke='url(%23g)' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M16 33a16 16 0 0 0 32 0' stroke='%234f46e5' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M32 49v5' stroke='%234f46e5' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');</style>
+  <script>
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  </script>
 </head>
 <body>
-  <section class="gate" id="login-gate" aria-label="Beast Gate">
-    <div class="gate__scene" aria-hidden="true">
-      <div class="gate__sky"></div>
-      <div class="gate__blood-moon"></div>
-      <div class="gate__moon-halo"></div>
-      <div class="gate__stars"></div>
-      <div class="gate__mountains"><div class="gate__mountain gate__mountain--far"></div><div class="gate__mountain gate__mountain--mid"></div><div class="gate__mountain gate__mountain--near"></div></div>
-      <div class="gate__portal-wrap"><div class="gate__arch gate__arch--left"></div><div class="gate__arch gate__arch--right"></div><div class="gate__arch gate__arch--top"></div><div class="gate__portal-core"></div><div class="gate__portal-glow"></div><div class="gate__portal-rune gate__portal-rune--1">ᚱ</div><div class="gate__portal-rune gate__portal-rune--2">ᚦ</div><div class="gate__portal-rune gate__portal-rune--3">ᛟ</div><div class="gate__portal-rune gate__portal-rune--4">ᛗ</div></div>
-      <div class="gate__beast-wrap"><div class="gate__beast-shadow"></div><div class="gate__beast"><div class="gate__b-body"></div><div class="gate__b-chest"></div><div class="gate__b-neck"></div><div class="gate__b-head"><div class="gate__b-ear gate__b-ear--left"></div><div class="gate__b-ear gate__b-ear--right"></div><div class="gate__b-eye-socket gate__b-eye-socket--left"><div class="gate__b-eye gate__b-eye--left"><div class="gate__b-eye-core"></div><div class="gate__b-eye-glow"></div></div></div><div class="gate__b-eye-socket gate__b-eye-socket--right"><div class="gate__b-eye gate__b-eye--right"><div class="gate__b-eye-core"></div><div class="gate__b-eye-glow"></div></div></div><div class="gate__b-snout"><div class="gate__b-jaw gate__b-jaw--upper"></div><div class="gate__b-jaw gate__b-jaw--lower"><div class="gate__b-tooth gate__b-tooth--1"></div><div class="gate__b-tooth gate__b-tooth--2"></div><div class="gate__b-tooth gate__b-tooth--3"></div></div><div class="gate__b-nostril gate__b-nostril--left"></div><div class="gate__b-nostril gate__b-nostril--right"></div></div><div class="gate__b-head-ridge"></div></div><div class="gate__b-paw gate__b-paw--left"><div class="gate__b-claw gate__b-claw--1"></div><div class="gate__b-claw gate__b-claw--2"></div><div class="gate__b-claw gate__b-claw--3"></div></div><div class="gate__b-paw gate__b-paw--right"><div class="gate__b-claw gate__b-claw--1"></div><div class="gate__b-claw gate__b-claw--2"></div><div class="gate__b-claw gate__b-claw--3"></div></div><div class="gate__b-rimlight"></div><div class="gate__b-fur-highlight gate__b-fur-highlight--1"></div><div class="gate__b-fur-highlight gate__b-fur-highlight--2"></div></div></div>
-      <div class="gate__fog gate__fog--back"></div><div class="gate__fog gate__fog--mid"></div><div class="gate__fog gate__fog--front"></div>
-      <div class="gate__smoke gate__smoke--left"></div><div class="gate__smoke gate__smoke--right"></div>
-      <canvas class="gate__embers-canvas" id="gate-embers"></canvas>
-      <canvas class="gate__rain-canvas" id="gate-fire-rain"></canvas>
-      <div class="gate__ground-light"></div>
-      <div class="gate__vignette"></div>
-      <div class="gate__success-flash" id="gate-success-flash"></div>
-      <div class="gate__welcome-text" id="gate-welcome-text" aria-live="assertive">
-        <span class="gate__welcome-title">Welcome to Jamaluuu World</span>
-        <span class="gate__welcome-sub">Local AI Transcription Studio is awakening.</span>
+  <section class="yeti-login" id="login-gate" aria-label="Login Gate">
+    
+    <!-- Background Decor with Enhanced Glitter -->
+    <div class="login-bg-decor">
+      <!-- Orbs (now HTML elements for better animation) -->
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+
+      <!-- Twinkling Stars & Glitter -->
+      <div class="star star-1"></div><div class="star star-2"></div><div class="star star-3"></div><div class="star star-4"></div>
+      <div class="star star-5"></div><div class="star star-6"></div><div class="star star-7"></div><div class="star star-8"></div>
+      <div class="star star-9"></div><div class="star star-10"></div><div class="star star-11"></div><div class="star star-12"></div>
+      <div class="star star-13"></div><div class="star star-14"></div><div class="star star-15"></div>
+      
+      <!-- Bottom Waves -->
+      <div class="waves-container">
+        <svg class="bg-waves wave-layer-1" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+          <path fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2" d="M0,160 C320,300 420,0 720,120 C1020,240 1200,60 1440,160" />
+        </svg>
+        <svg class="bg-waves wave-layer-2" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+          <path fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" d="M0,200 C280,320 500,40 720,160 C940,280 1160,80 1440,200" />
+        </svg>
+        <svg class="bg-waves wave-layer-3" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+          <path fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3" d="M0,240 C200,340 600,80 820,200 C1040,320 1280,100 1440,240" />
+        </svg>
+        <svg class="bg-waves wave-layer-4" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+          <path fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="4" d="M0,280 C150,360 700,120 920,240 C1140,360 1350,120 1440,280" />
+        </svg>
       </div>
     </div>
-    <div class="gate__brand">
-      <svg class="gate__brand-mark" viewBox="0 0 36 36" aria-hidden="true"><polygon points="18,2 34,30 2,30" fill="none" stroke="#ff3c2a" stroke-width="2.5" stroke-linejoin="round"/><polygon points="18,10 28,26 8,26" fill="#ff3c2a" opacity="0.4"/><line x1="18" y1="14" x2="18" y2="22" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="26" r="1.5" fill="#fff"/></svg>
-      <div>
-        <p class="gate__brand-title">MEETING TRANSCRIBER</p>
-        <p class="gate__brand-sub">Local AI Transcription Studio</p>
+
+    <div class="login-layout">
+      <!-- LEFT COLUMN -->
+      <div class="login-brand-col">
+        <div class="brand-header">
+          <div class="brand-logo">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12V8M8 16V8M12 20V4M16 16V8M20 12V8" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <span class="brand-name">Meeting Transcriber Studio</span>
+        </div>
+        
+        <h1 class="brand-title">Transcribe.<br>Understand.<br><span class="text-gradient">Act.</span></h1>
+        <p class="brand-subtitle">AI-powered transcription for your meetings, interviews, and conversations.</p>
+        
+        <div class="brand-features">
+          <div class="feature-item">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 3L4 14h7l-2 7 9-11h-7l2-7z" fill="currentColor"/></svg></div>
+            <div class="feature-text">
+              <strong>Fast & Accurate</strong>
+              <span>Get precise transcripts in seconds.</span>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V7.3l7-3.11v8.8z" fill="currentColor"/></svg></div>
+            <div class="feature-text">
+              <strong>Secure & Private</strong>
+              <span>Your data is encrypted and protected.</span>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z" fill="currentColor"/></svg></div>
+            <div class="feature-text">
+              <strong>Smart Summaries</strong>
+              <span>Extract key points and action items.</span>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="gate__card" role="main" aria-labelledby="gate-heading">
-      <div class="gate__card-glow" aria-hidden="true"></div>
-      <div class="gate__pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>SECURE ACCESS GATE</div>
-      <h1 class="gate__heading" id="gate-heading">Enter your<br>credentials to <em>continue.</em></h1>
-      <p class="gate__copy" id="gate-copy">This studio now uses server-side access control. Sign in to open the workspace.</p>
-      <form id="login-form" class="gate__form" autocomplete="off" novalidate>
-        <label class="gate__label" for="access-username">USERNAME</label>
-        <div class="gate__input-wrap">
-          <input id="access-username" name="access-username" type="text" class="gate__input" placeholder="Enter username" spellcheck="false" autocapitalize="none" autocomplete="username">
+
+      <!-- CENTER COLUMN (YETI) -->
+      <div class="login-center-col">
+        <div class="yeti-wrapper" id="yeti-wrapper">
+          <div class="yeti-container">
+            <svg id="yeti-svg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+              <!-- Body -->
+              <path d="M 180 600 Q 180 320 400 320 Q 620 320 620 600 Z" fill="#D3DADD" />
+              <g id="yeti-head">
+                <!-- Ears -->
+                <circle cx="260" cy="230" r="45" fill="#D3DADD"/>
+                <circle cx="260" cy="230" r="22" fill="#F06C6C"/>
+                <circle cx="540" cy="230" r="45" fill="#D3DADD"/>
+                <circle cx="540" cy="230" r="22" fill="#F06C6C"/>
+                <!-- Face Fluff Background -->
+                <ellipse cx="400" cy="290" rx="170" ry="150" fill="#D3DADD"/>
+                <!-- Dark Face Mask -->
+                <path d="M 260 290 C 260 170, 540 170, 540 290 C 540 370, 490 410, 400 410 C 310 410, 260 370, 260 290 Z" fill="#232F3E"/>
+                <!-- White Snout -->
+                <ellipse cx="400" cy="350" rx="75" ry="55" fill="#FFFFFF"/>
+                <g id="yeti-eyes">
+                  <!-- Left Eye -->
+                  <circle cx="330" cy="265" r="28" fill="#FFFFFF"/>
+                  <circle cx="335" cy="265" r="10" fill="#232F3E"/>
+                  <circle cx="338" cy="260" r="4" fill="#FFFFFF"/>
+                  <!-- Right Eye -->
+                  <circle cx="470" cy="265" r="28" fill="#FFFFFF"/>
+                  <circle cx="465" cy="265" r="10" fill="#232F3E"/>
+                  <circle cx="462" cy="260" r="4" fill="#FFFFFF"/>
+                </g>
+                <g id="yeti-muzzle">
+                  <ellipse cx="400" cy="325" rx="22" ry="14" fill="#F06C6C"/>
+                  <path d="M 380 355 Q 400 375 420 355" fill="none" stroke="#232F3E" stroke-width="6" stroke-linecap="round"/>
+                </g>
+              </g>
+              <g id="yeti-hands" style="transform-origin: 400px 600px;">
+                <!-- Left Hand -->
+                <g id="yeti-hand-l" style="transform-origin: 220px 600px;">
+                  <path d="M 180 600 Q 160 420 310 400" fill="none" stroke="#D3DADD" stroke-width="85" stroke-linecap="round"/>
+                  <circle cx="310" cy="400" r="42" fill="#D3DADD"/>
+                  <!-- Pads -->
+                  <ellipse cx="320" cy="390" rx="12" ry="16" fill="#232F3E" transform="rotate(30 320 390)"/>
+                  <ellipse cx="295" cy="405" rx="10" ry="12" fill="#232F3E" transform="rotate(30 295 405)"/>
+                </g>
+                <!-- Right Hand -->
+                <g id="yeti-hand-r" style="transform-origin: 580px 600px;">
+                  <path d="M 620 600 Q 640 420 490 400" fill="none" stroke="#D3DADD" stroke-width="85" stroke-linecap="round"/>
+                  <circle cx="490" cy="400" r="42" fill="#D3DADD"/>
+                  <!-- Pads -->
+                  <ellipse cx="480" cy="390" rx="12" ry="16" fill="#232F3E" transform="rotate(-30 480 390)"/>
+                  <ellipse cx="505" cy="405" rx="10" ry="12" fill="#232F3E" transform="rotate(-30 505 405)"/>
+                </g>
+              </g>
+            </svg>
+          </div>
+          
+          <div class="yeti-card">
+            <h1 class="yeti-heading">Welcome Back 👋</h1>
+            <p class="yeti-copy">Sign in to your transcription studio.</p>
+            
+            <form id="login-form" class="yeti-form" autocomplete="off" novalidate>
+              <div class="yeti-input-group">
+                <label for="access-username">USERNAME</label>
+                <div class="yeti-input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                  <input id="access-username" name="access-username" type="text" placeholder="Enter username" spellcheck="false" autocapitalize="none" autocomplete="username">
+                </div>
+              </div>
+              <div class="yeti-input-group">
+                <label for="secret-word">PASSWORD</label>
+                <div class="yeti-pwd-wrap yeti-input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  <input id="secret-word" name="secret-word" type="password" placeholder="Enter password" spellcheck="false" autocapitalize="none" autocomplete="current-password">
+                  <button id="gate-visibility" type="button" aria-label="Toggle visibility">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M2.2 12s3.3-6.4 9.8-6.4 9.8 6.4 9.8 6.4-3.3 6.4-9.8 6.4S2.2 12 2.2 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <p class="yeti-feedback" id="gate-feedback" role="alert">Sign in to access the studio.</p>
+              <button id="btn-enter-gate" class="yeti-btn" type="submit"><span id="gate-btn-text">Sign In</span></button>
+            </form>
+          </div>
         </div>
-        <label class="gate__label" for="secret-word">PASSWORD</label>
-        <div class="gate__input-wrap" id="gate-input-wrap">
-          <input id="secret-word" name="secret-word" type="password" class="gate__input" placeholder="Enter password" spellcheck="false" autocapitalize="none" autocomplete="current-password" aria-describedby="gate-feedback">
-          <button class="gate__eye-btn" id="gate-visibility" type="button" aria-label="Toggle visibility" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.2 12s3.3-6.4 9.8-6.4 9.8 6.4 9.8 6.4-3.3 6.4-9.8 6.4S2.2 12 2.2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></button>
+        <div class="login-footer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          Secured with end-to-end encryption
         </div>
-        <p class="gate__feedback" id="gate-feedback" role="alert" aria-live="assertive">The beast is watching.</p>
-        <button class="gate__btn" id="btn-enter-gate" type="submit"><span id="gate-btn-text">Sign In</span><svg class="gate__btn-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <p class="gate__note" id="gate-note">Authenticated sessions are checked by the backend before API and WebSocket access is allowed.</p>
-      </form>
-    </div>
-    <div class="gate__badges">
-      <div class="gate__badge"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2L4 6v6c0 5 3.5 9.7 8 11 4.5-1.3 8-6 8-11V6l-8-4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span>LOCAL CAPTURE<small>Audio from your machine</small></span></div>
-      <div class="gate__badge"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>PRIVATE<small>Your data stays local</small></span></div>
-      <div class="gate__badge"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>SECURE<small>Config-based providers</small></span></div>
-      <div class="gate__badge"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span>FAST<small>Local or cloud engine</small></span></div>
+      </div>
+
+      <!-- RIGHT COLUMN (GLASS GRAPHICS) -->
+      <div class="login-graphics-col">
+        <!-- Floating Media Player -->
+        <div class="glass-float float-player">
+          <div class="player-top">
+            <div class="player-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+            <div class="player-wave">
+              <div class="bar h-3"></div><div class="bar h-6"></div><div class="bar h-4"></div><div class="bar h-8"></div>
+              <div class="bar h-5"></div><div class="bar h-7"></div><div class="bar h-3"></div><div class="bar h-9"></div>
+              <div class="bar h-4"></div><div class="bar h-6"></div><div class="bar h-2"></div>
+            </div>
+          </div>
+          <div class="player-lines">
+            <div class="line w-full"></div>
+            <div class="line w-3-4"></div>
+            <div class="line w-1-2"></div>
+            <div class="line w-5-6"></div>
+          </div>
+        </div>
+        
+        <!-- Floating Sparkle -->
+        <div class="glass-float float-sparkle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        </div>
+
+        <!-- Floating Mic -->
+        <div class="glass-float float-mic">
+          <div class="mic-inner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -88,6 +232,7 @@
           <span class="status-badge" id="badge-transcription-provider">Checking transcription</span>
           <span class="status-badge" id="badge-summary-provider">Checking summary</span>
           <button class="btn btn-ghost btn-icon btn-summarizer-launch" id="btn-open-summarizer" type="button">Text Summarizer</button>
+          <button class="btn btn-ghost btn-icon" id="btn-theme-toggle" type="button" aria-label="Toggle theme">🌓 Theme</button>
           <button class="btn btn-ghost btn-icon" id="btn-logout" type="button">Logout</button>
         </div>
       </header>
@@ -97,8 +242,72 @@
 
         <!-- LEFT: Controls -->
         <aside class="left-rail">
-          <section class="studio-card" id="live-capture-card">
-            <div class="card-header"><h2>Live Capture</h2></div>
+          
+          <!-- 1. Local Recording -->
+          <details class="studio-card local-recording-card" id="local-recording-card" open>
+            <summary class="card-header">
+              <h2>Local Recording</h2>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+            <div class="card-body card-stack">
+              <div class="service-pill" id="local-recording-status">Records system audio locally in the backend. No model is needed to save the WAV file.</div>
+              <p class="upload-helper">Uses the selected system audio device above and saves a local `.wav` file when you stop.</p>
+              <div class="recording-indicator" id="local-recording-indicator">
+                <span class="rec-dot"></span>
+                <span class="rec-text">Recording locally</span>
+                <span class="rec-timer" id="local-rec-timer">00:00</span>
+              </div>
+              <div class="primary-actions">
+                <button class="btn btn-secondary btn-upload" id="btn-start-local-recording" type="button">Start local recording</button>
+                <button class="btn btn-danger btn-stop hidden" id="btn-stop-local-recording" type="button">Stop local recording</button>
+              </div>
+              <div class="file-meta-card hidden">
+                <div class="file-meta-head">
+                  <span class="soft-pill" id="local-recording-file-pill">No recording yet</span>
+                  <span class="file-size" id="local-recording-file-size">0 B</span>
+                </div>
+                <strong class="file-name" id="local-recording-file-name">No local file yet</strong>
+                <p class="file-meta-copy" id="local-recording-file-meta">Start and stop to save a backend WAV file that is ready to download.</p>
+              </div>
+            </div>
+          </details>
+
+          <!-- 2. Audio File Upload -->
+          <details class="studio-card studio-card-accent" id="upload-card">
+            <summary class="card-header">
+              <h2>Audio File</h2>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+            <div class="card-body card-stack">
+              <label class="file-picker" for="input-audio-file">
+                <input type="file" id="input-audio-file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.webm">
+                <span class="file-picker-title">Choose local audio file</span>
+                <span class="file-picker-subtitle">Zoom recordings, interviews, lectures, voice notes</span>
+              </label>
+              <div class="file-meta-card">
+                <div class="file-meta-head">
+                  <span class="soft-pill" id="upload-status-pill">No file selected</span>
+                  <span class="file-size" id="audio-file-size">0 B</span>
+                </div>
+                <strong class="file-name" id="audio-file-name">No file selected</strong>
+                <p class="file-meta-copy" id="audio-file-meta">Select a recording to transcribe.</p>
+                <div class="progress-track" id="upload-progress-track"><div class="progress-fill" id="upload-progress-fill"></div></div>
+              </div>
+              <div class="form-group">
+                <label for="input-upload-title">Title</label>
+                <input type="text" id="input-upload-title" class="form-input" placeholder="Auto-fills from file name">
+              </div>
+              <button class="btn btn-secondary btn-upload" id="btn-upload-audio" type="button">Transcribe audio file</button>
+              <p class="upload-helper" id="upload-helper-text">File transcription gives cleaner results than live capture.</p>
+            </div>
+          </details>
+
+          <!-- 3. Live Capture -->
+          <details class="studio-card" id="live-capture-card">
+            <summary class="card-header">
+              <h2>Live Capture</h2>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
             <div class="card-body card-stack">
               <div class="service-pill" id="summary-status">Checking summary provider…</div>
               <div class="service-pill" id="live-capture-status">Live capture is available when the backend can access local system audio devices.</div>
@@ -137,75 +346,14 @@
                 <button class="btn btn-danger btn-stop hidden" id="btn-stop" type="button">Stop transcription</button>
               </div>
             </div>
-          </section>
+          </details>
 
-          <!-- Audio File Upload -->
-          <section class="studio-card studio-card-accent" id="upload-card">
-            <div class="card-header"><h2>Audio File</h2></div>
-            <div class="card-body card-stack">
-              <label class="file-picker" for="input-audio-file">
-                <input type="file" id="input-audio-file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.webm">
-                <span class="file-picker-title">Choose local audio file</span>
-                <span class="file-picker-subtitle">Zoom recordings, interviews, lectures, voice notes</span>
-              </label>
-              <div class="file-meta-card">
-                <div class="file-meta-head">
-                  <span class="soft-pill" id="upload-status-pill">No file selected</span>
-                  <span class="file-size" id="audio-file-size">0 B</span>
-                </div>
-                <strong class="file-name" id="audio-file-name">No file selected</strong>
-                <p class="file-meta-copy" id="audio-file-meta">Select a recording to transcribe.</p>
-                <div class="progress-track" id="upload-progress-track"><div class="progress-fill" id="upload-progress-fill"></div></div>
-              </div>
-              <div class="form-group">
-                <label for="input-upload-title">Title</label>
-                <input type="text" id="input-upload-title" class="form-input" placeholder="Auto-fills from file name">
-              </div>
-              <button class="btn btn-secondary btn-upload" id="btn-upload-audio" type="button">Transcribe audio file</button>
-              <p class="upload-helper" id="upload-helper-text">File transcription gives cleaner results than live capture.</p>
-            </div>
-          </section>
-
-          <section class="studio-card local-recording-card" id="local-recording-card">
-            <div class="card-header"><h2>Local Recording</h2></div>
-            <div class="card-body card-stack">
-              <div class="service-pill" id="local-recording-status">Records system audio locally in the backend. No model is needed to save the WAV file.</div>
-              <p class="upload-helper">Uses the selected system audio device above and saves a local `.wav` file when you stop.</p>
-              <div class="recording-indicator" id="local-recording-indicator">
-                <span class="rec-dot"></span>
-                <span class="rec-text">Recording locally</span>
-                <span class="rec-timer" id="local-rec-timer">00:00</span>
-              </div>
-              <div class="primary-actions">
-                <button class="btn btn-secondary btn-upload" id="btn-start-local-recording" type="button">Start local recording</button>
-                <button class="btn btn-danger btn-stop hidden" id="btn-stop-local-recording" type="button">Stop local recording</button>
-              </div>
-              <div class="file-meta-card">
-                <div class="file-meta-head">
-                  <span class="soft-pill" id="local-recording-file-pill">No recording yet</span>
-                  <span class="file-size" id="local-recording-file-size">0 B</span>
-                </div>
-                <strong class="file-name" id="local-recording-file-name">No local file yet</strong>
-                <p class="file-meta-copy" id="local-recording-file-meta">Start and stop to save a backend WAV file that is ready to download.</p>
-              </div>
-              <section class="local-recording-library" aria-labelledby="local-recording-library-title">
-                <div class="local-recording-library-head">
-                  <div>
-                    <strong id="local-recording-library-title">Saved recordings</strong>
-                    <p>Every finished local recording appears here.</p>
-                  </div>
-                  <span class="soft-pill" id="local-recording-count">0 files</span>
-                </div>
-                <div class="local-recording-list" id="local-recording-list">
-                  <div class="local-recording-list-empty">No saved recordings yet.</div>
-                </div>
-              </section>
-            </div>
-          </section>
-
-          <!-- Exports (moved from right rail) -->
-          <section class="studio-card">
-            <div class="card-header"><h2>Export</h2></div>
+          <!-- 4. Exports -->
+          <details class="studio-card" id="export-card">
+            <summary class="card-header">
+              <h2>Export</h2>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
             <div class="card-body card-stack">
               <div class="export-group">
                 <div class="export-group-header"><span>Transcript</span><small>TXT · MD · DOCX · PDF</small></div>
@@ -217,7 +365,7 @@
                 </div>
               </div>
             </div>
-          </section>
+          </details>
         </aside>
 
         <!-- CENTER: Transcript + Summary -->
@@ -291,9 +439,12 @@
         <!-- RIGHT: Past Meetings + Audio Diagnostics (collapsed) -->
         <aside class="right-rail">
           <section class="studio-card">
-            <div class="card-header">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 4px;">
               <h2>History</h2>
-              <button class="btn btn-ghost btn-icon" id="btn-refresh-history" type="button">Refresh</button>
+              <div style="display: flex; gap: 2px;">
+                <button class="btn btn-ghost btn-inline" id="btn-view-all-history-top" type="button" style="padding: 6px 10px !important;">View all</button>
+                <button class="btn btn-ghost btn-inline" id="btn-refresh-history" type="button" style="padding: 6px 10px !important;">Refresh</button>
+              </div>
             </div>
             <div class="meeting-list" id="meeting-list">
               <div class="transcript-empty compact-empty">
@@ -406,11 +557,35 @@
     <span id="header-summary-text"></span>
   </div>
 
+  <div class="modal-backdrop hidden" id="history-modal-backdrop"></div>
+  <div class="modal hidden" id="history-modal" role="dialog" aria-labelledby="history-modal-title">
+    <div class="modal-header">
+      <h2 id="history-modal-title">Full History & Recordings</h2>
+      <button class="btn btn-ghost btn-icon" id="btn-close-history-modal" type="button" aria-label="Close">Close</button>
+    </div>
+    <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+      <table class="history-table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--border-soft);">Title</th>
+            <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--border-soft);">Date</th>
+            <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--border-soft);">Size / Words</th>
+            <th style="text-align: left; padding: 10px; border-bottom: 1px solid var(--border-soft);">Type</th>
+            <th style="text-align: right; padding: 10px; border-bottom: 1px solid var(--border-soft);">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="history-modal-list">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="toast-container" id="toast-container"></div>
 
   <script src="/js/websocket.js"></script>
   <script src="/js/export.js"></script>
-  <script src="/js/beast-gate.js"></script>
-  <script src="/js/app.js"></script>
+  <script src="/js/beast-gate.js?v=4"></script>
+  <script src="/js/app.js?v=22"></script>
 </body>
 </html>

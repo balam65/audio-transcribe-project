@@ -79,6 +79,21 @@ const App = {
     });
     document.getElementById('btn-refresh-history')?.addEventListener('click', () => this.loadHistory());
     document.getElementById('btn-open-summarizer')?.addEventListener('click', () => this.openSummarizer());
+    
+    const themeBtn = document.getElementById('btn-theme-toggle');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', () => {
+        const html = document.documentElement;
+        if (html.getAttribute('data-theme') === 'dark') {
+          html.removeAttribute('data-theme');
+          localStorage.setItem('theme', 'light');
+        } else {
+          html.setAttribute('data-theme', 'dark');
+          localStorage.setItem('theme', 'dark');
+        }
+      });
+    }
+
     document.getElementById('btn-close-summarizer')?.addEventListener('click', () => this.closeSummarizer());
     document.getElementById('summarizer-backdrop')?.addEventListener('click', () => this.closeSummarizer());
     document.getElementById('btn-summarizer-use-transcript')?.addEventListener('click', () => this.useCurrentTranscriptForSummarizer());
@@ -952,7 +967,6 @@ const App = {
       const [meetingsData, recordingsData] = await Promise.all(requests);
 
       this.localRecordingFiles = Array.isArray(recordingsData.recordings) ? recordingsData.recordings : [];
-      this.renderLocalRecordingLibrary(this.localRecordingFiles);
       this.renderHistory({
         meetings: meetingsData.meetings || [],
         recordings: this.localRecordingFiles,
@@ -983,7 +997,7 @@ const App = {
       sections.push(this.renderHistorySection(
         'Local Recordings',
         'Saved WAV files from the backend recorder.',
-        recordings.slice(0, 12).map((recording) => this.renderLocalRecordingHistoryItem(recording)).join('')
+        recordings.slice(0, 5).map((recording) => this.renderLocalRecordingHistoryItem(recording)).join('')
       ));
     }
 
@@ -991,9 +1005,11 @@ const App = {
       sections.push(this.renderHistorySection(
         'Meetings',
         'Completed live sessions and uploaded transcripts.',
-        meetings.slice(0, 12).map((meeting) => this.renderMeetingHistoryItem(meeting)).join('')
+        meetings.slice(0, 5).map((meeting) => this.renderMeetingHistoryItem(meeting)).join('')
       ));
     }
+
+
 
     list.innerHTML = sections.join('');
 
@@ -1004,6 +1020,98 @@ const App = {
     list.querySelectorAll('[data-history-delete]').forEach((button) => {
       button.addEventListener('click', () => this.deleteMeeting(button.dataset.historyDelete));
     });
+
+    list.querySelectorAll('[data-history-delete-recording]').forEach((button) => {
+      button.addEventListener('click', () => this.deleteRecording(button.dataset.historyDeleteRecording));
+    });
+
+    const viewAllBtn = document.getElementById('btn-view-all-history-top');
+    if (viewAllBtn) {
+      viewAllBtn.onclick = () => this.openHistoryModal(meetings, recordings);
+    }
+  },
+
+  openHistoryModal(meetings = [], recordings = []) {
+    const backdrop = document.getElementById('history-modal-backdrop');
+    const modal = document.getElementById('history-modal');
+    const tbody = document.getElementById('history-modal-list');
+    
+    if (!modal || !tbody) return;
+
+    const allItems = [];
+    meetings.forEach(m => allItems.push({ type: 'meeting', data: m, date: new Date(m.created_at).getTime() }));
+    recordings.forEach(r => allItems.push({ type: 'recording', data: r, date: new Date(r.created_at).getTime() }));
+
+    allItems.sort((a, b) => b.date - a.date);
+
+    tbody.innerHTML = allItems.map(item => {
+      if (item.type === 'meeting') {
+        const m = item.data;
+        return `
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft);">${this.escapeHtml(m.title || 'Untitled Meeting')}</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft);">${this.escapeHtml(this.formatDateTime(m.created_at))}</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft);">${m.word_count || 0} words</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft);"><span class="soft-pill">Meeting</span></td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft); text-align: right;">
+              <button class="btn btn-ghost btn-inline" data-history-view="${m.id}" type="button">View</button>
+              <a class="btn btn-ghost btn-inline" href="/api/export/transcript/${this.escapeHtml(m.id)}/txt" download>TXT</a>
+              <button class="btn btn-ghost btn-inline" data-history-delete="${m.id}" type="button" style="color: var(--accent-danger);">Delete</button>
+            </td>
+          </tr>
+        `;
+      } else {
+        const r = item.data;
+        return `
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft);">${this.escapeHtml(r.file_name || 'Local recording.wav')}</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft);">${this.escapeHtml(this.formatDateTime(r.created_at))}</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft);">${this.formatBytes(r.file_size_bytes || 0)}</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft);"><span class="soft-pill">WAV Audio</span></td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-soft); text-align: right;">
+              <a class="btn btn-ghost btn-inline" href="${this.escapeHtml(r.download_url || '#')}" download="${this.escapeHtml(r.download_name || r.file_name || 'local-recording.wav')}">Download</a>
+              <button class="btn btn-ghost btn-inline" data-history-delete-recording="${this.escapeHtml(r.file_name)}" type="button" style="color: var(--accent-danger);">Delete</button>
+            </td>
+          </tr>
+        `;
+      }
+    }).join('');
+
+    tbody.querySelectorAll('[data-history-view]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.closeHistoryModal();
+        this.viewMeeting(button.dataset.historyView);
+      });
+    });
+
+    tbody.querySelectorAll('[data-history-delete]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.closeHistoryModal();
+        this.deleteMeeting(button.dataset.historyDelete);
+      });
+    });
+
+    tbody.querySelectorAll('[data-history-delete-recording]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.closeHistoryModal();
+        this.deleteRecording(button.dataset.historyDeleteRecording);
+      });
+    });
+
+    if (backdrop) backdrop.classList.remove('hidden');
+    modal.classList.remove('hidden');
+
+    const closeBtn = document.getElementById('btn-close-history-modal');
+    if (closeBtn) {
+      closeBtn.onclick = () => this.closeHistoryModal();
+    }
+  },
+
+  closeHistoryModal() {
+    const backdrop = document.getElementById('history-modal-backdrop');
+    const modal = document.getElementById('history-modal');
+    if (backdrop) backdrop.classList.add('hidden');
+    if (modal) modal.classList.add('hidden');
   },
 
   renderHistorySection(title, description, itemsMarkup) {
@@ -1061,6 +1169,7 @@ const App = {
             href="${this.escapeHtml(recording.download_url || '#')}"
             download="${this.escapeHtml(recording.download_name || recording.file_name || 'local-recording.wav')}"
           >Download</a>
+          <button class="btn btn-ghost btn-inline" data-history-delete-recording="${this.escapeHtml(recording.file_name)}" type="button">Delete</button>
         </div>
       </div>
     `;
@@ -2620,12 +2729,31 @@ const App = {
       this.onStatus(`Loaded meeting: ${meeting.title || 'Untitled Meeting'}`, 'success');
       this.loadHistory();
     } catch (error) {
-      this.showToast('Failed to load meeting', 'error');
+      this.showToast('Could not delete meeting', 'error');
+    }
+  },
+
+  async deleteRecording(fileName) {
+    if (!fileName) return;
+
+    try {
+      const response = await this.apiFetch(`/api/transcription/local-recording/files/${encodeURIComponent(fileName)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const message = await this.readErrorMessage(response);
+        throw new Error(message || 'Delete failed');
+      }
+
+      this.showToast('Recording deleted', 'success');
+      this.loadHistory();
+    } catch (error) {
+      console.error('Delete recording error:', error);
+      this.showToast('Could not delete recording', 'error');
     }
   },
 
   async deleteMeeting(id) {
-    if (!window.confirm('Delete this meeting and all its data?')) return;
 
     try {
       const response = await this.apiFetch(`/api/meetings/${id}`, { method: 'DELETE' });

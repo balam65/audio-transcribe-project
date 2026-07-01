@@ -746,6 +746,23 @@ async def download_saved_local_recording(file_name: str, request: Request):
     )
 
 
+@router.delete("/local-recording/files/{file_name}")
+async def delete_saved_local_recording(file_name: str, request: Request):
+    """Delete a saved local recording from disk."""
+    require_authenticated_request(request)
+    _require_local_recording_available()
+    path = _resolve_local_recording_path(file_name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Recording file is missing.")
+    
+    try:
+        path.unlink()
+        return {"success": True, "message": "Recording deleted"}
+    except Exception as e:
+        logger.error(f"Failed to delete recording {file_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete recording: {e}")
+
+
 @router.post("/file")
 async def transcribe_audio_file(
     request: Request,

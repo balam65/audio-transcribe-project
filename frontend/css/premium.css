@@ -1,0 +1,238 @@
+/* ══════════════════════════════════════════════════
+   PREMIUM VISUAL OVERLAY — Cohesive Glass UI
+   ══════════════════════════════════════════════════ */
+
+/* ─── Enhanced Tokens ─── */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-blur: 24px;
+  --premium-shadow: 0 8px 32px rgba(30, 41, 59, 0.08), 0 2px 8px rgba(30, 41, 59, 0.04);
+  --premium-shadow-hover: 0 16px 48px rgba(30, 41, 59, 0.12), 0 4px 12px rgba(30, 41, 59, 0.06);
+  --accent-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+}
+
+/* ─── Animated Mesh Background ─── */
+body {
+  background: #f8fafc !important;
+  color: #1e293b !important;
+}
+body.authenticated::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    radial-gradient(circle at 15% 50%, rgba(79, 70, 229, 0.08), transparent 40%),
+    radial-gradient(circle at 85% 30%, rgba(124, 58, 237, 0.08), transparent 40%),
+    radial-gradient(circle at 50% 80%, rgba(14, 165, 233, 0.08), transparent 50%);
+  animation: meshDrift 20s ease-in-out infinite alternate;
+  display: block !important;
+  pointer-events: none;
+}
+@keyframes meshDrift {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* ─── Global Glassmorphism Base ─── */
+.app-header, .studio-card, .transcript-panel, .summarizer-drawer {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.8) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--premium-shadow) !important;
+}
+
+/* ─── Header ─── */
+.app-header {
+  border-bottom: 1px solid var(--glass-border) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.03) !important;
+}
+.app-title-group h1 {
+  background: var(--accent-gradient) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+.app-logo-icon {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.app-logo-icon svg path {
+  stroke: url(#studioMic) !important; 
+}
+
+/* ─── Cards & Panels ─── */
+.studio-card, .transcript-panel {
+  border-radius: 16px !important;
+  transition: all 0.3s ease !important;
+  overflow: hidden !important;
+}
+.studio-card:hover, .transcript-panel:hover {
+  box-shadow: var(--premium-shadow-hover) !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Fix the solid white patches by making inner components transparent */
+.card-header, .transcript-header, .history-section-header, .summarizer-head {
+  background: rgba(255, 255, 255, 0.3) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+.card-body, .transcript-area, .meeting-list, .summarizer-chat {
+  background: transparent !important;
+}
+.transcript-activity, .status-bar, .stats-bar, .summarizer-toolbar, .summarizer-form, .summarizer-recents {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+.stat-item {
+  background: transparent !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+.stat-item:last-child {
+  border-right: none !important;
+}
+.stats-bar {
+  gap: 0 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Remove weird lines / box shadows */
+.studio-card-accent::before {
+  display: none !important;
+}
+
+/* ─── Typography & Icons ─── */
+.card-header h2, .panel-kicker {
+  background: var(--accent-gradient) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  font-weight: 700 !important;
+}
+.stat-value {
+  color: #4f46e5 !important;
+  font-weight: 700 !important;
+}
+
+/* ─── Premium Buttons ─── */
+.btn-primary, .btn-start, #btn-start-inline {
+  background: var(--accent-gradient) !important;
+  border: none !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+.btn-primary:hover:not(:disabled), .btn-start:hover:not(:disabled), #btn-start-inline:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4) !important;
+  transform: translateY(-1px) !important;
+  filter: brightness(1.05);
+}
+.btn-secondary, .btn-upload, .btn-export, .search-shell {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+  color: #334155 !important;
+  transition: all 0.2s ease !important;
+}
+.btn-secondary:hover:not(:disabled), .btn-upload:hover:not(:disabled), .btn-export:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.04) !important;
+}
+.btn-danger, .btn-stop, #btn-stop-inline {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3) !important;
+}
+.btn-danger:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ─── Form Elements ─── */
+.form-input, .device-select, .search-input {
+  background: rgba(255, 255, 255, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  color: #1e293b !important;
+}
+.form-input:focus, .device-select:focus, .search-input:focus {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2) !important;
+}
+
+/* ─── Status Badges & Pills ─── */
+.status-badge, .health-pill, .soft-pill, .service-pill {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
+  color: #475569 !important;
+}
+.status-badge.ready, .health-pill.connected, .service-pill.ready, .soft-pill.ready {
+  background: rgba(240, 253, 244, 0.6) !important;
+  border-color: rgba(187, 247, 208, 0.8) !important;
+  color: #15803d !important;
+}
+
+/* ─── Lists & Tables ─── */
+.meeting-item {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+.meeting-item:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+.history-table th {
+  background: rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+.history-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+.history-table tr:hover td {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* ─── Specific Element Overrides ─── */
+.file-meta-card {
+  background: rgba(255, 255, 255, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+.file-picker {
+  background: rgba(255, 255, 255, 0.3) !important;
+  border: 2px dashed rgba(148, 163, 184, 0.5) !important;
+}
+.file-picker:hover {
+  background: rgba(255, 255, 255, 0.5) !important;
+  border-color: #818cf8 !important;
+}
+.wave-bars span {
+  background: var(--accent-gradient) !important;
+}
+.progress-track {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+.progress-fill {
+  background: var(--accent-gradient) !important;
+}
+.transcript-empty-icon {
+  background: var(--accent-gradient) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* Scrollbar adjustment for glass theme */
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4) !important;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6) !important;
+}
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
